@@ -61,6 +61,15 @@ public class FilesTabController {
     CheckBox filesOnlyFilterCheckBox;
 
     @FXML
+    Button expandAllButton;
+
+    @FXML
+    Button collapseAllButton;
+
+    @FXML
+    Button resetButton;
+
+    @FXML
     public void initialize() {
         setupDomainTree();
         setupFilesTree();
@@ -77,6 +86,8 @@ public class FilesTabController {
         fileFilterField.textProperty().addListener((obs, oldValue, newValue) -> refreshCurrentDomainTree());
         sortComboBox.valueProperty().addListener((obs, oldValue, newValue) -> refreshCurrentDomainTree());
         filesOnlyFilterCheckBox.selectedProperty().addListener((obs, oldValue, newValue) -> refreshCurrentDomainTree());
+
+        setFileControlsEnabled(false);
     }
 
     private void setupDomainTree() {
@@ -141,6 +152,7 @@ public class FilesTabController {
                 filesTreeView.setCursor(Cursor.DEFAULT);
                 updateFileSelectionCount();
                 updateCurrentDomainSummary();
+                setFileControlsEnabled(true);
             });
 
             new Thread(loadDomainFilesTask).start();
@@ -273,6 +285,7 @@ public class FilesTabController {
         this.currentDomainFiles = Collections.emptyList();
         this.fileFilterField.clear();
         this.filesOnlyFilterCheckBox.setSelected(false);
+        setFileControlsEnabled(false);
 
         List<BackupFile> domains;
         try {
@@ -474,6 +487,15 @@ public class FilesTabController {
         if (parent.isLeaf()) return Stream.empty();
 
         return Stream.concat(parent.getChildren().stream(), parent.getChildren().stream().flatMap(this::flattenAllChildren));
+    }
+
+    private void setFileControlsEnabled(boolean enabled) {
+        fileFilterField.setDisable(!enabled);
+        sortComboBox.setDisable(!enabled);
+        filesOnlyFilterCheckBox.setDisable(!enabled);
+        expandAllButton.setDisable(!enabled);
+        collapseAllButton.setDisable(!enabled);
+        resetButton.setDisable(!enabled);
     }
 
     @FXML

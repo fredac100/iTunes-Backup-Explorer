@@ -11,9 +11,9 @@
             <CheckBox fx:id="filesOnlyFilterCheckBox" text="Files only"/>
             <Label text="Sort" styleClass="info-label"/>
             <ComboBox fx:id="sortComboBox" prefWidth="180.0"/>
-            <Button text="Expand all" onAction="#expandAllFiles"/>
-            <Button text="Collapse all" onAction="#collapseAllFiles"/>
-            <Button text="Reset" onAction="#clearFileFilter"/>
+            <Button fx:id="expandAllButton" text="Expand all" onAction="#expandAllFiles"/>
+            <Button fx:id="collapseAllButton" text="Collapse all" onAction="#collapseAllFiles"/>
+            <Button fx:id="resetButton" text="Reset" onAction="#clearFileFilter"/>
         </HBox>
         <Label fx:id="selectedDomainSummary" text="No domain selected" styleClass="info-label"/>
     </VBox>
