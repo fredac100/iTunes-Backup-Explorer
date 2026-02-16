@@ -6,6 +6,7 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
+import me.maxih.itunes_backup_explorer.ui.PreferencesController;
 import me.maxih.itunes_backup_explorer.ui.WindowController;
 
 import java.io.IOException;
@@ -19,6 +20,7 @@ public class ITunesBackupExplorer extends Application {
     public void start(Stage stage) throws IOException {
         FXMLLoader fxmlLoader = new FXMLLoader(ITunesBackupExplorer.class.getResource("window.fxml"));
         Parent root = fxmlLoader.load();
+        root.getStyleClass().add("Light".equalsIgnoreCase(PreferencesController.getTheme()) ? "theme-light" : "theme-dark");
         controller = fxmlLoader.getController();
 
         scene = new Scene(root, 1200, 700);

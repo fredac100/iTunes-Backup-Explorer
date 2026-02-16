@@ -4,7 +4,7 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<AnchorPane prefHeight="550.0" prefWidth="650.0" stylesheets="@stylesheet.css" xmlns="http://javafx.com/javafx/11.0.14-internal"
+<AnchorPane prefHeight="620.0" prefWidth="760.0" stylesheets="@stylesheet.css" xmlns="http://javafx.com/javafx/11.0.14-internal"
             xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="me.maxih.itunes_backup_explorer.ui.PreferencesController">
    <ScrollPane fitToWidth="true" AnchorPane.bottomAnchor="60.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
@@ -15,7 +15,7 @@
 
          <VBox spacing="10">
             <Label text="Backup Locations" styleClass="section-title"/>
-            <Label text="Diretórios onde o iTunes armazena seus backups" styleClass="info-label" wrapText="true"/>
+            <Label text="Diretorios monitorados automaticamente para descobrir backups" styleClass="info-label" wrapText="true"/>
             <ListView fx:id="backupRootsListView" prefHeight="120.0">
                <VBox.margin>
                   <Insets top="5.0"/>
@@ -31,10 +31,23 @@
 
          <VBox spacing="10">
             <Label text="Appearance" styleClass="section-title"/>
-            <Label text="Tema da interface (apenas Dark disponível no momento)" styleClass="info-label" wrapText="true"/>
             <HBox spacing="10" alignment="CENTER_LEFT">
-               <Label text="Theme:" styleClass="info-label"/>
-               <ComboBox fx:id="themeComboBox" prefWidth="150.0"/>
+               <Label text="Theme" styleClass="info-label" minWidth="150"/>
+               <ComboBox fx:id="themeComboBox" prefWidth="180.0"/>
+            </HBox>
+         </VBox>
+
+         <Separator/>
+
+         <VBox spacing="10">
+            <Label text="Explorer Behavior" styleClass="section-title"/>
+            <CheckBox fx:id="autoSelectNewestBackupCheckBox" text="Selecionar automaticamente o backup mais recente ao iniciar"/>
+            <CheckBox fx:id="expandDomainGroupsCheckBox" text="Expandir grupos de dominios automaticamente na arvore"/>
+            <CheckBox fx:id="confirmBeforeDeleteCheckBox" text="Pedir confirmacao antes de apagar arquivos"/>
+            <CheckBox fx:id="searchIncludeNonFilesCheckBox" text="Incluir pastas e links simbolicos nas buscas"/>
+            <HBox spacing="10" alignment="CENTER_LEFT">
+               <Label text="Limite de resultados na busca (0 = sem limite)" styleClass="info-label" minWidth="300"/>
+               <Spinner fx:id="searchResultLimitSpinner" prefWidth="120"/>
             </HBox>
          </VBox>
 
@@ -43,7 +56,7 @@
          <VBox spacing="10">
             <Label text="Export Settings" styleClass="section-title"/>
             <CheckBox fx:id="preserveTimestampsCheckBox" text="Preservar timestamps originais dos arquivos"/>
-            <CheckBox fx:id="createDirectoryStructureCheckBox" text="Criar estrutura de diretórios na exportação"/>
+            <CheckBox fx:id="createDirectoryStructureCheckBox" text="Criar estrutura de diretorios na exportacao"/>
             <CheckBox fx:id="skipExistingFilesCheckBox" text="Pular arquivos existentes automaticamente"/>
          </VBox>
 
@@ -52,7 +65,7 @@
          <VBox spacing="10">
             <Label text="About" styleClass="section-title"/>
             <HBox spacing="10">
-               <Label text="Versão:" styleClass="info-label" minWidth="100.0"/>
+               <Label text="Versao:" styleClass="info-label" minWidth="100.0"/>
                <Label fx:id="versionLabel" styleClass="info-value"/>
             </HBox>
             <HBox spacing="10">

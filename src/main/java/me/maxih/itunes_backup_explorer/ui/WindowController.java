@@ -60,9 +60,9 @@ public class WindowController {
     InfoTabController infoTabPageController;
 
     @FXML
-    AnchorPane fileSearchTabPage;
+    AnchorPane mediaTabPage;
     @FXML
-    FileSearchTabController fileSearchTabPageController;
+    MediaTabController mediaTabPageController;
 
     @FXML
     AnchorPane filesTabPage;
@@ -85,7 +85,7 @@ public class WindowController {
 
     @FXML
     public void initialize() {
-        this.lockedTabPages = Arrays.asList(this.filesTabPage, this.fileSearchTabPage);
+        this.lockedTabPages = Arrays.asList(this.filesTabPage, this.mediaTabPage);
 
         this.tabPane.getSelectionModel().selectedItemProperty().addListener((observable, oldTab, newTab) -> {
             if (newTab == null || this.selectedBackup == null) return;
@@ -95,8 +95,8 @@ public class WindowController {
                 if (oldTab != null) this.tabPane.getSelectionModel().select(oldTab);
             } else if (tabPage == this.filesTabPage) {
                 this.filesTabPageController.tabShown(this.selectedBackup);
-            } else if (tabPage == this.fileSearchTabPage) {
-                this.fileSearchTabPageController.tabShown(this.selectedBackup);
+            } else if (tabPage == this.mediaTabPage) {
+                this.mediaTabPageController.tabShown(this.selectedBackup);
             } else if (tabPage == this.appsTabPage) {
                 this.appsTabPageController.tabShown(this.selectedBackup);
             }
@@ -180,6 +180,7 @@ public class WindowController {
 
     public void cleanUp() {
         this.backups.forEach(ITunesBackup::cleanUp);
+        ThumbnailService.getInstance().shutdown();
     }
 
     public void loadBackup(ITunesBackup backup) {
@@ -322,8 +323,8 @@ public class WindowController {
             this.tabPane.getSelectionModel().select(0);
         } else if (selectedTabPage == this.filesTabPage) {
             this.filesTabPageController.tabShown(backup);
-        } else if (selectedTabPage == this.fileSearchTabPage) {
-            this.fileSearchTabPageController.tabShown(backup);
+        } else if (selectedTabPage == this.mediaTabPage) {
+            this.mediaTabPageController.tabShown(backup);
         } else if (selectedTabPage == this.appsTabPage) {
             this.appsTabPageController.tabShown(backup);
         }

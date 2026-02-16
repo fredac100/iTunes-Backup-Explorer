@@ -39,6 +39,8 @@ public class FileActions {
     public static void extractFile(BackupFile file, Window chooserOwnerWindow) {
         FileChooser chooser = new FileChooser();
         chooser.setInitialFileName(file.getFileName());
+        File lastDirectory = PreferencesController.getLastExportDirectory();
+        if (lastDirectory != null) chooser.setInitialDirectory(lastDirectory);
         String ext = file.getFileExtension();
         if (ext.length() > 0)
             chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter(ext, "*." + ext));
@@ -46,7 +48,8 @@ public class FileActions {
         if (destination == null) return;
 
         try {
-            file.extract(destination);
+            file.extract(destination, PreferencesController.getPreserveTimestamps());
+            PreferencesController.setLastExportDirectory(destination.getParentFile());
         } catch (IOException | BackupReadException | NotUnlockedException | UnsupportedCryptoException e) {
             logger.error("Falha ao extrair arquivo", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage(), ButtonType.OK);
@@ -95,15 +98,17 @@ public class FileActions {
      * @param removeCallback This is called with the <code>fileID</code>s of the deleted files including children
      */
     public static void delete(BackupFile file, Consumer<List<String>> removeCallback) {
-        Alert confirmation = Dialogs.getAlert(Alert.AlertType.CONFIRMATION,
-                file.getFileType() == BackupFile.FileType.DIRECTORY
-                        ? "Are you sure you want to delete this folder and everything in it?"
-                        : "Are you sure you want to delete this file?",
-                ButtonType.YES, ButtonType.CANCEL
-        );
-        ((Button) confirmation.getDialogPane().lookupButton(ButtonType.YES)).setDefaultButton(false);
-        ((Button) confirmation.getDialogPane().lookupButton(ButtonType.CANCEL)).setDefaultButton(true);
-        if (confirmation.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.YES) return;
+        if (PreferencesController.getConfirmBeforeDelete()) {
+            Alert confirmation = Dialogs.getAlert(Alert.AlertType.CONFIRMATION,
+                    file.getFileType() == BackupFile.FileType.DIRECTORY
+                            ? "Are you sure you want to delete this folder and everything in it?"
+                            : "Are you sure you want to delete this file?",
+                    ButtonType.YES, ButtonType.CANCEL
+            );
+            ((Button) confirmation.getDialogPane().lookupButton(ButtonType.YES)).setDefaultButton(false);
+            ((Button) confirmation.getDialogPane().lookupButton(ButtonType.CANCEL)).setDefaultButton(true);
+            if (confirmation.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.YES) return;
+        }
 
         try {
             List<String> deletedFileIDs = new ArrayList<>();

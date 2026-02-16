@@ -45,8 +45,8 @@
                     <Tab text="Files">
                         <fx:include fx:id="filesTabPage" source="files_tab.fxml"/>
                     </Tab>
-                    <Tab text="File Search">
-                        <fx:include fx:id="fileSearchTabPage" source="file_search_tab.fxml"/>
+                    <Tab text="Media">
+                        <fx:include fx:id="mediaTabPage" source="media_tab.fxml"/>
                     </Tab>
                     <Tab text="Apps">
                         <fx:include fx:id="appsTabPage" source="apps_tab.fxml"/>

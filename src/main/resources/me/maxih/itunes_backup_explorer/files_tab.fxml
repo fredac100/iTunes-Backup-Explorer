@@ -27,11 +27,13 @@
     </SplitPane>
 
     <HBox spacing="10" AnchorPane.bottomAnchor="14.0" AnchorPane.leftAnchor="14.0">
+        <Button mnemonicParsing="false" onAction="#selectAllDomains" text="Select All"/>
         <Button mnemonicParsing="false" onAction="#exportSelectedDomains" text="Export selected domains"/>
         <Label fx:id="selectedDomainsCount" text="0 domains selected" styleClass="info-label"/>
     </HBox>
     <HBox spacing="10" AnchorPane.bottomAnchor="14.0" AnchorPane.rightAnchor="14.0">
         <Label fx:id="selectedFilesCount" text="0 files selected" styleClass="info-label"/>
+        <Button fx:id="selectAllFilesButton" mnemonicParsing="false" onAction="#selectAllFiles" text="Select All"/>
         <Button mnemonicParsing="false" onAction="#exportSelectedFiles" text="Export selected files"/>
     </HBox>
 </AnchorPane>
