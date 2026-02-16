@@ -32,6 +32,7 @@ public class FilesTabController {
     private ITunesBackup selectedBackup;
     private Task<TreeItem<BackupFileEntry>> loadDomainFilesTask;
     private List<BackupFile> currentDomainFiles = Collections.emptyList();
+    private boolean fileCountUpdatePending = false;
 
     @FXML
     SplitPane splitPane;
@@ -70,6 +71,9 @@ public class FilesTabController {
     Button resetButton;
 
     @FXML
+    Button selectAllFilesButton;
+
+    @FXML
     public void initialize() {
         setupDomainTree();
         setupFilesTree();
@@ -92,28 +96,38 @@ public class FilesTabController {
 
     private void setupDomainTree() {
         this.domainsTreeView.setCellFactory(view -> new TreeCell<>() {
+            private final CheckBox checkBox = new CheckBox();
+            private final ImageView iconView = new ImageView();
+            private final HBox graphic = new HBox(8, checkBox, iconView);
+            private BackupFileEntry boundItem;
+
+            {
+                graphic.setAlignment(Pos.CENTER_LEFT);
+                iconView.setFitWidth(32);
+                iconView.setFitHeight(32);
+            }
+
             @Override
             protected void updateItem(BackupFileEntry item, boolean empty) {
                 super.updateItem(item, empty);
+
+                if (boundItem != null) {
+                    checkBox.selectedProperty().unbindBidirectional(boundItem.checkBoxSelectedProperty());
+                    checkBox.indeterminateProperty().unbindBidirectional(boundItem.checkBoxIndeterminateProperty());
+                    boundItem = null;
+                }
 
                 if (empty || item == null) {
                     setText(null);
                     setGraphic(null);
                 } else {
-                    this.setPrefHeight(36);
+                    setPrefHeight(36);
 
-                    CheckBox checkBox = new CheckBox();
                     checkBox.selectedProperty().bindBidirectional(item.checkBoxSelectedProperty());
                     checkBox.indeterminateProperty().bindBidirectional(item.checkBoxIndeterminateProperty());
+                    boundItem = item;
 
-                    HBox graphic = new HBox(8, checkBox);
-                    graphic.setAlignment(Pos.CENTER_LEFT);
-
-                    ImageView icon = new ImageView(item.getIcon());
-                    icon.setFitWidth(32);
-                    icon.setFitHeight(32);
-                    graphic.getChildren().add(icon);
-
+                    iconView.setImage(item.getIcon());
                     setGraphic(graphic);
                     setText(item.getDisplayName());
 
@@ -161,7 +175,16 @@ public class FilesTabController {
 
     private void setupFilesTree() {
         this.filesTreeView.setCellFactory(view -> new TreeCell<>() {
+            private final CheckBox checkBox = new CheckBox();
+            private final ImageView iconView = new ImageView();
+            private final HBox graphic = new HBox(8, checkBox, iconView);
+            private BackupFileEntry boundItem;
+
             {
+                graphic.setAlignment(Pos.CENTER_LEFT);
+                iconView.setFitWidth(16);
+                iconView.setFitHeight(16);
+
                 itemProperty().addListener((observable, oldValue, newValue) -> {
                     if (newValue == null || newValue.getFile().isEmpty() || getTreeItem() == null || getTreeItem().getParent() == null) {
                         setContextMenu(null);
@@ -180,25 +203,21 @@ public class FilesTabController {
             protected void updateItem(BackupFileEntry item, boolean empty) {
                 super.updateItem(item, empty);
 
+                if (boundItem != null) {
+                    checkBox.selectedProperty().unbindBidirectional(boundItem.checkBoxSelectedProperty());
+                    checkBox.indeterminateProperty().unbindBidirectional(boundItem.checkBoxIndeterminateProperty());
+                    boundItem = null;
+                }
+
                 if (empty || item == null) {
                     setText(null);
                     setGraphic(null);
                 } else {
-                    boolean isDirectory = item.getFile().filter(f -> f.getFileType() == BackupFile.FileType.DIRECTORY).isPresent();
-
-                    CheckBox checkBox = new CheckBox();
                     checkBox.selectedProperty().bindBidirectional(item.checkBoxSelectedProperty());
                     checkBox.indeterminateProperty().bindBidirectional(item.checkBoxIndeterminateProperty());
-                    if (isDirectory) checkBox.setAllowIndeterminate(true);
+                    boundItem = item;
 
-                    HBox graphic = new HBox(8, checkBox);
-                    graphic.setAlignment(Pos.CENTER_LEFT);
-
-                    ImageView icon = new ImageView(item.getIcon());
-                    icon.setFitWidth(16);
-                    icon.setFitHeight(16);
-                    graphic.getChildren().add(icon);
-
+                    iconView.setImage(item.getIcon());
                     setGraphic(graphic);
                     setText(item.getDisplayName());
                 }
@@ -238,7 +257,7 @@ public class FilesTabController {
                     }
                 }
 
-                updateFileSelectionCount();
+                scheduleFileSelectionCountUpdate();
             });
 
             levels.get(level).add(treeItem);
@@ -453,6 +472,16 @@ public class FilesTabController {
         selectedDomainsCount.setText(count + " domain" + (count != 1 ? "s" : "") + " selected");
     }
 
+    private void scheduleFileSelectionCountUpdate() {
+        if (!fileCountUpdatePending) {
+            fileCountUpdatePending = true;
+            Platform.runLater(() -> {
+                fileCountUpdatePending = false;
+                updateFileSelectionCount();
+            });
+        }
+    }
+
     private void updateFileSelectionCount() {
         if (filesTreeView.getRoot() == null) {
             selectedFilesCount.setText("0 files selected");
@@ -496,6 +525,7 @@ public class FilesTabController {
         expandAllButton.setDisable(!enabled);
         collapseAllButton.setDisable(!enabled);
         resetButton.setDisable(!enabled);
+        selectAllFilesButton.setDisable(!enabled);
     }
 
     @FXML
@@ -515,6 +545,22 @@ public class FilesTabController {
         fileFilterField.clear();
         filesOnlyFilterCheckBox.setSelected(false);
         sortComboBox.setValue("Path (A-Z)");
+    }
+
+    @FXML
+    public void selectAllDomains() {
+        if (domainsTreeView.getRoot() == null) return;
+        flattenAllChildren(domainsTreeView.getRoot())
+            .forEach(item -> item.getValue().setSelection(BackupFileEntry.Selection.ALL));
+        updateDomainSelectionCount();
+    }
+
+    @FXML
+    public void selectAllFiles() {
+        if (filesTreeView.getRoot() == null) return;
+        flattenAllChildren(filesTreeView.getRoot())
+            .forEach(item -> item.getValue().setSelection(BackupFileEntry.Selection.ALL));
+        updateFileSelectionCount();
     }
 
     @FXML
