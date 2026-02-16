@@ -16,6 +16,7 @@ import me.maxih.itunes_backup_explorer.api.ITunesBackup;
 import me.maxih.itunes_backup_explorer.api.NotUnlockedException;
 import me.maxih.itunes_backup_explorer.api.UnsupportedCryptoException;
 import me.maxih.itunes_backup_explorer.util.FileSize;
+import me.maxih.itunes_backup_explorer.util.MediaConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,6 +71,7 @@ public class MediaTabController {
     @FXML ToggleButton filterPhotos;
     @FXML ToggleButton filterVideos;
     @FXML SplitPane splitPane;
+    @FXML StackPane previewContainer;
 
     @FXML
     public void initialize() {
@@ -80,6 +82,17 @@ public class MediaTabController {
             }
             applyFilter();
         });
+
+        previewImage.fitWidthProperty().bind(
+                previewContainer.widthProperty().subtract(28)
+        );
+        previewImage.fitHeightProperty().bind(
+                previewContainer.heightProperty().subtract(28)
+        );
+
+        Thread toolsCheck = new Thread(MediaConverter::detectTools, "media-tools-check");
+        toolsCheck.setDaemon(true);
+        toolsCheck.start();
     }
 
     public void tabShown(ITunesBackup backup) {
@@ -236,7 +249,8 @@ public class MediaTabController {
         filePathLabel.setText("Path: " + file.relativePath);
         fileDateLabel.setText("");
 
-        ThumbnailService.getInstance().loadPreview(file, 600, previewImage::setImage);
+        int maxSize = (int) Math.max(800, previewContainer.getWidth());
+        ThumbnailService.getInstance().loadPreview(file, maxSize, previewImage::setImage);
     }
 
     private void clearPreview() {

@@ -426,11 +426,22 @@ public class WindowController {
         about.setTitle("About iTunes Backup Explorer");
         about.setHeaderText("iTunes Backup Explorer v2.1");
         about.setContentText(
-                "Desenvolvido originalmente por maxih\n\n" +
-                        "Licença: MIT\n\n" +
-                        "GitHub: https://github.com/MaxiHuHe04/iTunes-Backup-Explorer"
+                "Originally developed by MaxiHuHe04\n" +
+                        "Enhanced by fredac100\n\n" +
+                        "License: MIT\n\n" +
+                        "https://github.com/MaxiHuHe04/iTunes-Backup-Explorer\n" +
+                        "https://github.com/fredac100"
         );
-        ((Stage) about.getDialogPane().getScene().getWindow()).getIcons().add(ITunesBackupExplorer.APP_ICON);
+
+        DialogPane dialogPane = about.getDialogPane();
+        dialogPane.setMinWidth(480);
+        dialogPane.getStylesheets().add(
+                ITunesBackupExplorer.class.getResource("stylesheet.css").toExternalForm()
+        );
+        String theme = "Light".equalsIgnoreCase(PreferencesController.getTheme()) ? "theme-light" : "theme-dark";
+        dialogPane.getStyleClass().add(theme);
+
+        ((Stage) dialogPane.getScene().getWindow()).getIcons().add(ITunesBackupExplorer.APP_ICON);
         about.showAndWait();
     }
 
@@ -458,10 +469,7 @@ public class WindowController {
         javafx.concurrent.Task<long[]> task = new javafx.concurrent.Task<>() {
             @Override
             protected long[] call() throws Exception {
-                List<me.maxih.itunes_backup_explorer.api.BackupFile> files = backup.queryAllFiles();
-                long totalFiles = files.size();
-                long totalSize = files.stream().mapToLong(me.maxih.itunes_backup_explorer.api.BackupFile::getSize).sum();
-                return new long[]{totalFiles, totalSize};
+                return backup.queryFileStats();
             }
         };
 
@@ -469,7 +477,11 @@ public class WindowController {
             long[] result = task.getValue();
             Platform.runLater(() -> {
                 statusTotalFiles.setText("Total files: " + result[0]);
-                statusBackupSize.setText("Size: " + FileSize.format(result[1]));
+                if (result[1] >= 0) {
+                    statusBackupSize.setText("Size: " + FileSize.format(result[1]));
+                } else {
+                    statusBackupSize.setText("Size: --");
+                }
             });
         });
 

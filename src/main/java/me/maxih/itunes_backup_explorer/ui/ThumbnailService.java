@@ -5,6 +5,7 @@ import javafx.scene.image.Image;
 import javafx.scene.image.WritableImage;
 import javafx.scene.paint.Color;
 import me.maxih.itunes_backup_explorer.api.BackupFile;
+import me.maxih.itunes_backup_explorer.util.MediaConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -104,9 +105,13 @@ public class ThumbnailService {
 
         executor.submit(() -> {
             File tempFile = null;
+            File convertedFile = null;
             try {
                 String ext = file.getFileExtension();
-                if (!isSupportedImage(ext)) {
+                boolean nativeSupport = isSupportedImage(ext);
+                boolean convertible = MediaConverter.needsConversion(ext);
+
+                if (!nativeSupport && !convertible) {
                     Image placeholder = isVideo(ext) ? getVideoPlaceholder() : getPhotoPlaceholder();
                     cache.put(file.fileID, placeholder);
                     Platform.runLater(() -> onLoaded.accept(placeholder));
@@ -117,14 +122,25 @@ public class ThumbnailService {
                 tempFile.deleteOnExit();
                 file.extract(tempFile, false);
 
-                File finalTemp = tempFile;
-                try (InputStream is = new FileInputStream(finalTemp)) {
+                File imageFile = tempFile;
+                if (!nativeSupport && convertible) {
+                    convertedFile = MediaConverter.convertToJpeg(tempFile, ext, size);
+                    if (convertedFile == null) {
+                        Image placeholder = isVideo(ext) ? getVideoPlaceholder() : getPhotoPlaceholder();
+                        cache.put(file.fileID, placeholder);
+                        Platform.runLater(() -> onLoaded.accept(placeholder));
+                        return;
+                    }
+                    imageFile = convertedFile;
+                }
+
+                try (InputStream is = new FileInputStream(imageFile)) {
                     Image thumb = new Image(is, size, size, true, true);
                     if (!thumb.isError()) {
                         cache.put(file.fileID, thumb);
                         Platform.runLater(() -> onLoaded.accept(thumb));
                     } else {
-                        Image placeholder = getPhotoPlaceholder();
+                        Image placeholder = isVideo(ext) ? getVideoPlaceholder() : getPhotoPlaceholder();
                         cache.put(file.fileID, placeholder);
                         Platform.runLater(() -> onLoaded.accept(placeholder));
                     }
@@ -136,9 +152,8 @@ public class ThumbnailService {
                 cache.put(file.fileID, placeholder);
                 Platform.runLater(() -> onLoaded.accept(placeholder));
             } finally {
-                if (tempFile != null && tempFile.exists()) {
-                    tempFile.delete();
-                }
+                if (tempFile != null && tempFile.exists()) tempFile.delete();
+                if (convertedFile != null && convertedFile.exists()) convertedFile.delete();
             }
         });
     }
@@ -146,9 +161,13 @@ public class ThumbnailService {
     public void loadPreview(BackupFile file, int maxSize, Consumer<Image> onLoaded) {
         executor.submit(() -> {
             File tempFile = null;
+            File convertedFile = null;
             try {
                 String ext = file.getFileExtension();
-                if (!isSupportedImage(ext)) {
+                boolean nativeSupport = isSupportedImage(ext);
+                boolean convertible = MediaConverter.needsConversion(ext);
+
+                if (!nativeSupport && !convertible) {
                     Image placeholder = isVideo(ext) ? getVideoPlaceholder() : getPhotoPlaceholder();
                     Platform.runLater(() -> onLoaded.accept(placeholder));
                     return;
@@ -158,13 +177,23 @@ public class ThumbnailService {
                 tempFile.deleteOnExit();
                 file.extract(tempFile, false);
 
-                File finalTemp = tempFile;
-                try (InputStream is = new FileInputStream(finalTemp)) {
+                File imageFile = tempFile;
+                if (!nativeSupport && convertible) {
+                    convertedFile = MediaConverter.convertToJpeg(tempFile, ext, maxSize);
+                    if (convertedFile == null) {
+                        Image placeholder = isVideo(ext) ? getVideoPlaceholder() : getPhotoPlaceholder();
+                        Platform.runLater(() -> onLoaded.accept(placeholder));
+                        return;
+                    }
+                    imageFile = convertedFile;
+                }
+
+                try (InputStream is = new FileInputStream(imageFile)) {
                     Image preview = new Image(is, maxSize, maxSize, true, true);
                     if (!preview.isError()) {
                         Platform.runLater(() -> onLoaded.accept(preview));
                     } else {
-                        Image placeholder = getPhotoPlaceholder();
+                        Image placeholder = isVideo(ext) ? getVideoPlaceholder() : getPhotoPlaceholder();
                         Platform.runLater(() -> onLoaded.accept(placeholder));
                     }
                 }
@@ -174,9 +203,8 @@ public class ThumbnailService {
                 Image placeholder = isVideo(ext) ? getVideoPlaceholder() : getPhotoPlaceholder();
                 Platform.runLater(() -> onLoaded.accept(placeholder));
             } finally {
-                if (tempFile != null && tempFile.exists()) {
-                    tempFile.delete();
-                }
+                if (tempFile != null && tempFile.exists()) tempFile.delete();
+                if (convertedFile != null && convertedFile.exists()) convertedFile.delete();
             }
         });
     }
