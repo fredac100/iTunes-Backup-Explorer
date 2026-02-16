@@ -88,17 +88,25 @@ public class BackupFile {
     }
 
     private <T extends NSObject> T getObject(Class<T> type, UID uid) throws NoSuchElementException {
-        byte index = uid.getBytes()[0];
+        int index = uidToIndex(uid);
         Object obj = this.objects[index];
         if (type.isInstance(obj)) return type.cast(obj);
         throw new NoSuchElementException();
     }
 
     private void setObject(UID uid, NSObject object) {
-        byte index = uid.getBytes()[0];
+        int index = uidToIndex(uid);
         this.objects[index] = object;
-        // theoretically not necessary, but don't rely on the array never being cloned
         this.data.put("$objects", new NSArray(this.objects));
+    }
+
+    static int uidToIndex(UID uid) {
+        byte[] bytes = uid.getBytes();
+        int index = 0;
+        for (byte b : bytes) {
+            index = (index << 8) | (b & 0xFF);
+        }
+        return index;
     }
 
     public FileType getFileType() {
@@ -165,6 +173,11 @@ public class BackupFile {
 
     public void extract(File destination)
             throws IOException, BackupReadException, NotUnlockedException, UnsupportedCryptoException, UnsupportedOperationException {
+        extract(destination, true);
+    }
+
+    public void extract(File destination, boolean preserveTimestamps)
+            throws IOException, BackupReadException, NotUnlockedException, UnsupportedCryptoException, UnsupportedOperationException {
 
         switch (this.fileType) {
             case DIRECTORY:
@@ -181,19 +194,23 @@ public class BackupFile {
                         throw new BackupReadException(e);
                     }
 
-                    //noinspection ResultOfMethodCallIgnored
-                    this.properties.get(NSNumber.class, "LastModified")
-                            .map(NSNumber::longValue)
-                            .map(seconds -> seconds * 1000)
-                            .ifPresent(destination::setLastModified);
+                    if (preserveTimestamps) {
+                        //noinspection ResultOfMethodCallIgnored
+                        this.properties.get(NSNumber.class, "LastModified")
+                                .map(NSNumber::longValue)
+                                .map(seconds -> seconds * 1000)
+                                .ifPresent(destination::setLastModified);
+                    }
                 } else {
                     Files.copy(this.contentFile.toPath(), destination.toPath(),
                             StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
 
-                    this.properties.get(NSNumber.class, "LastModified")
-                            .map(NSNumber::longValue)
-                            .map(seconds -> seconds * 1000)
-                            .ifPresent(destination::setLastModified);
+                    if (preserveTimestamps) {
+                        this.properties.get(NSNumber.class, "LastModified")
+                                .map(NSNumber::longValue)
+                                .map(seconds -> seconds * 1000)
+                                .ifPresent(destination::setLastModified);
+                    }
                 }
                 break;
             case SYMBOLIC_LINK:
@@ -203,6 +220,11 @@ public class BackupFile {
     }
 
     public void extractToFolder(File destinationFolder, boolean withRelativePath)
+            throws IOException, BackupReadException, NotUnlockedException, UnsupportedCryptoException, UnsupportedOperationException {
+        extractToFolder(destinationFolder, withRelativePath, true);
+    }
+
+    public void extractToFolder(File destinationFolder, boolean withRelativePath, boolean preserveTimestamps)
             throws IOException, BackupReadException, NotUnlockedException, UnsupportedCryptoException, UnsupportedOperationException {
 
         String relative;
@@ -224,7 +246,7 @@ public class BackupFile {
             throw new FileAlreadyExistsException(destination.getAbsolutePath());
 
         Files.createDirectories(destination.getParentFile().toPath());
-        this.extract(destination);
+        this.extract(destination, preserveTimestamps);
     }
 
     public void replaceWith(File newFile) throws IOException, BackupReadException, UnsupportedCryptoException, NotUnlockedException, DatabaseConnectionException {

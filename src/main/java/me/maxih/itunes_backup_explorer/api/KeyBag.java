@@ -34,6 +34,9 @@ public class KeyBag {
 
     private static final int BUFFER_SIZE = 16384;
 
+    // Necessário pelo formato de backup da Apple - NÃO alterar
+    private static final byte[] APPLE_BACKUP_ZERO_IV = new byte[16];
+
     public int type;
     public byte[] uuid;
     public byte[] wrap;
@@ -116,23 +119,18 @@ public class KeyBag {
         return !this.unlocked;
     }
 
-    public void unlock(String passcode) throws InvalidKeyException {
+    public void unlock(char[] passcode) throws InvalidKeyException {
         try {
             byte[] salt1 = this.attrs.get("DPSL");
             int iterations1 = ByteBuffer.wrap(this.attrs.get("DPIC")).getInt();
-            KeySpec spec1 = new PBEKeySpec(passcode.toCharArray(), salt1, iterations1, 32 * 8);
+            KeySpec spec1 = new PBEKeySpec(passcode, salt1, iterations1, 32 * 8);
 
             SecretKeyFactory f1 = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
             SecretKey key1 = f1.generateSecret(spec1);
 
             byte[] salt2 = this.attrs.get("SALT");
             int iterations2 = ByteBuffer.wrap(this.attrs.get("ITER")).getInt();
-//            KeySpec spec2 = new PBEKeySpec(StandardCharsets.ISO_8859_1.decode(ByteBuffer.wrap(key1.getEncoded())).array(), salt2, iterations2, 32 * 8);
 
-//            SecretKeyFactory f2 = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");
-//            SecretKey keyEncryptionKey = f2.generateSecret(spec2);
-
-            // PBEKeySpec doesn't accept byte arrays and converting doesn't really work apparently
             PKCS5S2ParametersGenerator gen = new PKCS5S2ParametersGenerator(new SHA1Digest());
             gen.init(key1.getEncoded(), salt2, iterations2);
             byte[] keyEncryptionKey = ((KeyParameter) gen.generateDerivedParameters(32 * 8)).getKey();
@@ -154,6 +152,8 @@ public class KeyBag {
             this.unlocked = true;
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | NoSuchPaddingException e) {
             logger.error("Falha ao desbloquear KeyBag", e);
+        } finally {
+            Arrays.fill(passcode, '\0');
         }
     }
 
@@ -186,7 +186,7 @@ public class KeyBag {
 
         try {
             Cipher c = Cipher.getInstance(cipherMode);
-            c.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new IvParameterSpec(new byte[16]));
+            c.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new IvParameterSpec(APPLE_BACKUP_ZERO_IV));
             return new CipherInputStream(source, c);
         } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidAlgorithmParameterException e) {
             throw new UnsupportedCryptoException(e);
@@ -254,7 +254,7 @@ public class KeyBag {
 
         try {
             Cipher c = Cipher.getInstance("AES/CBC/PKCS5Padding");
-            c.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), new IvParameterSpec(new byte[16]));
+            c.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), new IvParameterSpec(APPLE_BACKUP_ZERO_IV));
             return new CipherOutputStream(destination, c);
         } catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidAlgorithmParameterException e) {
             throw new UnsupportedCryptoException(e);

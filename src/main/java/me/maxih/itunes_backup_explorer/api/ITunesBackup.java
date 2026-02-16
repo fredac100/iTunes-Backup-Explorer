@@ -11,6 +11,7 @@ import org.xml.sax.SAXException;
 import javax.xml.parsers.ParserConfigurationException;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.security.InvalidKeyException;
@@ -121,6 +122,7 @@ public class ITunesBackup {
 
         try {
             this.decryptedDatabaseFile = File.createTempFile("decrypted-manifest", ".sqlite3");
+            this.decryptedDatabaseFile.deleteOnExit();
             this.manifest.getKeyBag().get().decryptFile(manifest.protectionClass, manifest.getManifestKey().orElseThrow(), this.manifestDBFile, this.decryptedDatabaseFile);
         } catch (FileNotFoundException | InvalidKeyException e) {
             throw new BackupReadException(e);
@@ -198,6 +200,21 @@ public class ITunesBackup {
             logger.error("Falha ao fechar conexão com banco", e);
         }
 
+        try {
+            long fileSize = this.decryptedDatabaseFile.length();
+            try (FileOutputStream fos = new FileOutputStream(this.decryptedDatabaseFile)) {
+                byte[] zeros = new byte[8192];
+                long remaining = fileSize;
+                while (remaining > 0) {
+                    int toWrite = (int) Math.min(zeros.length, remaining);
+                    fos.write(zeros, 0, toWrite);
+                    remaining -= toWrite;
+                }
+            }
+        } catch (IOException e) {
+            logger.warn("Falha ao sobrescrever arquivo temporário com zeros: {}", this.decryptedDatabaseFile.getAbsolutePath());
+        }
+
         if (!this.decryptedDatabaseFile.delete())
             logger.warn("Falha ao deletar arquivo temporário: {}", this.decryptedDatabaseFile.getAbsolutePath());
     }
@@ -205,35 +222,32 @@ public class ITunesBackup {
     private List<BackupFile> queryFiles(String sql, StatementPreparation preparation) throws DatabaseConnectionException {
         if (!databaseConnected()) this.connectToDatabase();
 
-        try {
-            PreparedStatement statement = this.databaseCon.prepareStatement(sql);
+        try (PreparedStatement statement = this.databaseCon.prepareStatement(sql)) {
             preparation.prepare(statement);
 
-            ResultSet result = statement.executeQuery();
-
-            List<BackupFile> backupFiles = new ArrayList<>();
-            while (result.next()) {
-                try {
-                    backupFiles.add(new BackupFile(
-                            this,
-                            result.getString(1),
-                            result.getString(2),
-                            result.getString(3),
-                            result.getInt(4),
-                            (NSDictionary) PropertyListParser.parse(result.getBinaryStream(5))
-                    ));
-                } catch (BackupReadException e) {
-                    logger.error("Falha ao ler backup: {}", e.getMessage());
-                } catch (IOException | PropertyListFormatException | ParseException | ParserConfigurationException |
-                         SAXException e) {
-                    logger.error("Falha ao consultar backups", e);
+            try (ResultSet result = statement.executeQuery()) {
+                List<BackupFile> backupFiles = new ArrayList<>();
+                while (result.next()) {
+                    try {
+                        backupFiles.add(new BackupFile(
+                                this,
+                                result.getString(1),
+                                result.getString(2),
+                                result.getString(3),
+                                result.getInt(4),
+                                (NSDictionary) PropertyListParser.parse(result.getBinaryStream(5))
+                        ));
+                    } catch (BackupReadException e) {
+                        logger.error("Falha ao ler backup: {}", e.getMessage());
+                    } catch (IOException | PropertyListFormatException | ParseException | ParserConfigurationException |
+                             SAXException e) {
+                        logger.error("Falha ao consultar backups", e);
+                    }
                 }
+                return backupFiles;
             }
-
-            return backupFiles;
         } catch (SQLException e) {
-            logger.error("Falha ao conectar ao banco de dados", e);
-            return new ArrayList<>(0);
+            throw new DatabaseConnectionException(e);
         }
     }
 
@@ -245,6 +259,24 @@ public class ITunesBackup {
                     statement.setString(2, relativePathLike);
                 }
         );
+    }
+
+    public List<BackupFile> searchFilesMultiPattern(String domainLike, List<String> relativePathPatterns) throws DatabaseConnectionException {
+        if (relativePathPatterns.isEmpty()) return new ArrayList<>(0);
+
+        StringBuilder sql = new StringBuilder("SELECT * FROM files WHERE `domain` LIKE ? AND (");
+        for (int i = 0; i < relativePathPatterns.size(); i++) {
+            if (i > 0) sql.append(" OR ");
+            sql.append("`relativePath` LIKE ? COLLATE NOCASE ESCAPE '\\'");
+        }
+        sql.append(") ORDER BY `flags`, `domain`, `relativePath`");
+
+        return this.queryFiles(sql.toString(), statement -> {
+            statement.setString(1, domainLike);
+            for (int i = 0; i < relativePathPatterns.size(); i++) {
+                statement.setString(i + 2, relativePathPatterns.get(i));
+            }
+        });
     }
 
     public List<BackupFile> queryDomainRoots() throws DatabaseConnectionException {
@@ -299,29 +331,27 @@ public class ITunesBackup {
     }
 
     @SuppressWarnings({"SqlResolve", "SqlNoDataSourceInspection"})
-    public void updateFileInfo(String fileID, NSDictionary data) throws DatabaseConnectionException {
+    public void updateFileInfo(String fileID, NSDictionary data) throws DatabaseConnectionException, IOException {
         if (!databaseConnected()) this.connectToDatabase();
 
-        try {
-            PreparedStatement statement = this.databaseCon.prepareStatement("UPDATE Files SET file = ? WHERE fileID = ?");
+        try (PreparedStatement statement = this.databaseCon.prepareStatement("UPDATE Files SET file = ? WHERE fileID = ?")) {
             byte[] plist = BinaryPropertyListWriter.writeToArray(data);
             statement.setBytes(1, plist);
             statement.setString(2, fileID);
             statement.executeUpdate();
-        } catch (SQLException | IOException e) {
-            logger.error("Falha ao atualizar informações do arquivo", e);
+        } catch (SQLException e) {
+            throw new DatabaseConnectionException(e);
         }
     }
 
     @SuppressWarnings({"SqlResolve", "SqlNoDataSourceInspection"})
     public void removeFileFromDatabase(String fileID) throws DatabaseConnectionException {
         if (!databaseConnected()) this.connectToDatabase();
-        try {
-            PreparedStatement statement = this.databaseCon.prepareStatement("DELETE FROM Files WHERE fileID = ?");
+        try (PreparedStatement statement = this.databaseCon.prepareStatement("DELETE FROM Files WHERE fileID = ?")) {
             statement.setString(1, fileID);
             statement.executeUpdate();
         } catch (SQLException e) {
-            logger.error("Falha ao remover arquivo do banco", e);
+            throw new DatabaseConnectionException(e);
         }
     }
 

@@ -31,13 +31,13 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.security.InvalidKeyException;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class WindowController {
     private static final Logger logger = LoggerFactory.getLogger(WindowController.class);
-    static final DateFormat BACKUP_DATE_FMT = new SimpleDateFormat("dd.MM.yyyy HH:mm");
+    static final DateTimeFormatter BACKUP_DATE_FMT = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault());
 
     List<ITunesBackup> backups = new ArrayList<>();
     ITunesBackup selectedBackup;
@@ -188,7 +188,7 @@ public class WindowController {
         }
 
         ToggleButton backupEntry = new ToggleButton(backup.manifest.deviceName + "\n" + BACKUP_DATE_FMT.format(
-                backup.getBackupInfo().map(info -> info.lastBackupDate).orElse(backup.manifest.date)));
+                backup.getBackupInfo().map(info -> info.lastBackupDate).orElse(backup.manifest.date).toInstant()));
         backupEntry.getStyleClass().add("sidebar-button");
         backupEntry.setOnAction(this::backupSelected);
         backupEntry.setMaxWidth(Integer.MAX_VALUE);
@@ -279,9 +279,9 @@ public class WindowController {
         if (!this.selectedBackup.isLocked()) return true;
         if (this.selectedBackup.manifest.getKeyBag().isEmpty()) return false;
 
-        Optional<String> response = Dialogs.askPassword();
+        Optional<char[]> response = Dialogs.askPassword();
         if (response.isEmpty()) return false;
-        String password = response.get();
+        char[] password = response.get();
 
         try {
             selectedBackup.manifest.getKeyBag().get().unlock(password);
@@ -442,20 +442,41 @@ public class WindowController {
             return;
         }
 
-        try {
-            List<me.maxih.itunes_backup_explorer.api.BackupFile> files = selectedBackup.queryAllFiles();
-            int totalFiles = files.size();
-            long totalSize = files.stream().mapToLong(me.maxih.itunes_backup_explorer.api.BackupFile::getSize).sum();
-            statusTotalFiles.setText("Total files: " + totalFiles);
-            statusBackupSize.setText("Size: " + FileSize.format(totalSize));
-        } catch (Exception e) {
-            statusTotalFiles.setText("Total files: --");
-            statusBackupSize.setText("Size: --");
-        }
-
         String encryptionStatus = selectedBackup.manifest.encrypted ?
                 (selectedBackup.isLocked() ? "Encrypted (locked)" : "Encrypted (unlocked)") : "Not encrypted";
         statusEncryption.setText("Encryption: " + encryptionStatus);
         statusBackupPath.setText("Backup: " + selectedBackup.directory.getAbsolutePath());
+
+        if (selectedBackup.isLocked()) {
+            statusTotalFiles.setText("Total files: --");
+            statusBackupSize.setText("Size: --");
+            return;
+        }
+
+        ITunesBackup backup = selectedBackup;
+        javafx.concurrent.Task<long[]> task = new javafx.concurrent.Task<>() {
+            @Override
+            protected long[] call() throws Exception {
+                List<me.maxih.itunes_backup_explorer.api.BackupFile> files = backup.queryAllFiles();
+                long totalFiles = files.size();
+                long totalSize = files.stream().mapToLong(me.maxih.itunes_backup_explorer.api.BackupFile::getSize).sum();
+                return new long[]{totalFiles, totalSize};
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+            long[] result = task.getValue();
+            Platform.runLater(() -> {
+                statusTotalFiles.setText("Total files: " + result[0]);
+                statusBackupSize.setText("Size: " + FileSize.format(result[1]));
+            });
+        });
+
+        task.setOnFailed(event -> Platform.runLater(() -> {
+            statusTotalFiles.setText("Total files: --");
+            statusBackupSize.setText("Size: --");
+        }));
+
+        new Thread(task).start();
     }
 }

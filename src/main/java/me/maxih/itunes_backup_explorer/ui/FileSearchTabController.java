@@ -99,25 +99,35 @@ public class FileSearchTabController {
     public void searchFiles() {
         filesTable.getItems().clear();
 
-        try {
-            String domainQuery = getDomainQuery();
-            String pathQuery = relativePathQueryField.getText();
+        String domainQuery = getDomainQuery();
+        String pathQuery = relativePathQueryField.getText();
+        if (pathQuery.isEmpty()) pathQuery = "%";
 
-            if (pathQuery.isEmpty()) pathQuery = "%";
+        String selectedFileType = fileTypeComboBox.getValue();
+        ITunesBackup backup = this.selectedBackup;
+        String finalPathQuery = pathQuery;
 
-            List<BackupFile> searchResult = selectedBackup.searchFiles(domainQuery, pathQuery);
+        javafx.concurrent.Task<List<BackupFile>> task = new javafx.concurrent.Task<>() {
+            @Override
+            protected List<BackupFile> call() throws Exception {
+                List<BackupFile> searchResult = backup.searchFiles(domainQuery, finalPathQuery);
 
-            String selectedFileType = fileTypeComboBox.getValue();
-            if (selectedFileType != null && !selectedFileType.equals("All Types")) {
-                searchResult = filterByFileType(searchResult, selectedFileType);
+                if (selectedFileType != null && !selectedFileType.equals("All Types")) {
+                    searchResult = filterByFileType(searchResult, selectedFileType);
+                }
+
+                if (!PreferencesController.getSearchIncludeNonFiles()) {
+                    searchResult = searchResult.stream()
+                            .filter(file -> file.getFileType() == BackupFile.FileType.FILE)
+                            .collect(Collectors.toList());
+                }
+
+                return searchResult;
             }
+        };
 
-            if (!PreferencesController.getSearchIncludeNonFiles()) {
-                searchResult = searchResult.stream()
-                        .filter(file -> file.getFileType() == BackupFile.FileType.FILE)
-                        .collect(Collectors.toList());
-            }
-
+        task.setOnSucceeded(event -> {
+            List<BackupFile> searchResult = task.getValue();
             int totalResults = searchResult.size();
             int resultLimit = PreferencesController.getSearchResultLimit();
             boolean limited = resultLimit > 0 && totalResults > resultLimit;
@@ -125,13 +135,16 @@ public class FileSearchTabController {
                 searchResult = searchResult.subList(0, resultLimit);
             }
 
-            this.filesTable.setItems(FXCollections.observableList(searchResult.stream().map(BackupFileEntry::new).collect(Collectors.toList())));
-
+            filesTable.setItems(FXCollections.observableList(searchResult.stream().map(BackupFileEntry::new).collect(Collectors.toList())));
             updateResultsCount(searchResult.size(), totalResults);
-        } catch (DatabaseConnectionException e) {
-            logger.error("Falha ao buscar arquivos", e);
-            Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
-        }
+        });
+
+        task.setOnFailed(event -> {
+            logger.error("Falha ao buscar arquivos", task.getException());
+            Dialogs.showAlert(Alert.AlertType.ERROR, task.getException().getMessage());
+        });
+
+        new Thread(task).start();
     }
 
     private String getDomainQuery() {
@@ -221,12 +234,12 @@ public class FileSearchTabController {
 
     @FXML
     public void quickFilterPhotos() {
-        performMultiPatternSearch("CameraRollDomain", Arrays.asList("%.HEIC", "%.heic", "%.JPG", "%.jpg", "%.JPEG", "%.jpeg", "%.PNG", "%.png"));
+        performMultiPatternSearch("CameraRollDomain", Arrays.asList("%.HEIC", "%.JPG", "%.JPEG", "%.PNG"));
     }
 
     @FXML
     public void quickFilterVideos() {
-        performMultiPatternSearch("CameraRollDomain", Arrays.asList("%.MOV", "%.mov", "%.MP4", "%.mp4", "%.M4V", "%.m4v"));
+        performMultiPatternSearch("CameraRollDomain", Arrays.asList("%.MOV", "%.MP4", "%.M4V"));
     }
 
     @FXML
@@ -264,42 +277,44 @@ public class FileSearchTabController {
     private void performMultiPatternSearch(String domain, List<String> pathPatterns) {
         filesTable.getItems().clear();
 
-        try {
-            List<BackupFile> allResults = new ArrayList<>();
+        ITunesBackup backup = this.selectedBackup;
+        javafx.concurrent.Task<List<BackupFile>> task = new javafx.concurrent.Task<>() {
+            @Override
+            protected List<BackupFile> call() throws Exception {
+                List<BackupFile> results = backup.searchFilesMultiPattern(domain, pathPatterns);
 
-            for (String pattern : pathPatterns) {
-                List<BackupFile> results = selectedBackup.searchFiles(domain, pattern);
-                allResults.addAll(results);
+                if (!PreferencesController.getSearchIncludeNonFiles()) {
+                    results = results.stream()
+                            .filter(file -> file.getFileType() == BackupFile.FileType.FILE)
+                            .collect(Collectors.toList());
+                }
+
+                return results;
             }
+        };
 
-            Set<String> seenIds = new HashSet<>();
-            List<BackupFile> uniqueResults = allResults.stream()
-                .filter(file -> seenIds.add(file.fileID))
-                .collect(Collectors.toList());
-
-            if (!PreferencesController.getSearchIncludeNonFiles()) {
-                uniqueResults = uniqueResults.stream()
-                        .filter(file -> file.getFileType() == BackupFile.FileType.FILE)
-                        .collect(Collectors.toList());
-            }
-
-            int totalResults = uniqueResults.size();
+        task.setOnSucceeded(event -> {
+            List<BackupFile> results = task.getValue();
+            int totalResults = results.size();
             int resultLimit = PreferencesController.getSearchResultLimit();
-            if (resultLimit > 0 && uniqueResults.size() > resultLimit) {
-                uniqueResults = uniqueResults.subList(0, resultLimit);
+            if (resultLimit > 0 && results.size() > resultLimit) {
+                results = results.subList(0, resultLimit);
             }
 
-            this.filesTable.setItems(FXCollections.observableList(uniqueResults.stream().map(BackupFileEntry::new).collect(Collectors.toList())));
-
-            updateResultsCount(uniqueResults.size(), totalResults);
+            filesTable.setItems(FXCollections.observableList(results.stream().map(BackupFileEntry::new).collect(Collectors.toList())));
+            updateResultsCount(results.size(), totalResults);
 
             domainComboBox.setValue(domain);
             relativePathQueryField.setText("");
             fileTypeComboBox.setValue("All Types");
-        } catch (DatabaseConnectionException e) {
-            logger.error("Falha ao buscar arquivos", e);
-            Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
-        }
+        });
+
+        task.setOnFailed(event -> {
+            logger.error("Falha ao buscar arquivos", task.getException());
+            Dialogs.showAlert(Alert.AlertType.ERROR, task.getException().getMessage());
+        });
+
+        new Thread(task).start();
     }
 
     public void tabShown(ITunesBackup backup) {

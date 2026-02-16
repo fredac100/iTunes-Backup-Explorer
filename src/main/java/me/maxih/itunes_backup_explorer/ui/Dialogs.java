@@ -19,8 +19,8 @@ import java.util.Optional;
 
 public class Dialogs {
 
-    public static Optional<String> askPassword() {
-        Dialog<String> dialog = new Dialog<>();
+    public static Optional<char[]> askPassword() {
+        Dialog<char[]> dialog = new Dialog<>();
         dialog.setTitle("Enter the password");
         dialog.setHeaderText("This backup is encrypted with a password");
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -36,7 +36,7 @@ public class Dialogs {
         dialog.getDialogPane().setContent(content);
 
         dialog.setResultConverter(pressedButton ->
-                pressedButton == ButtonType.OK ? passwordField.getText() : null);
+                pressedButton == ButtonType.OK ? passwordField.getText().toCharArray() : null);
 
         return dialog.showAndWait();
     }
