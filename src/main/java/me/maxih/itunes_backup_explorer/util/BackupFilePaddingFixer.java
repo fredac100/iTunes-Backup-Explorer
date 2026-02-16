@@ -25,14 +25,18 @@ public class BackupFilePaddingFixer {
         long actualSize = 0;
 
         try (RandomAccessFile raf = new RandomAccessFile(file, "rw")) {
-            long position = raf.length();
+            long fileLength = raf.length();
+            if (fileLength < 16) return;
+
+            long position = fileLength;
 
             outerLoop:
             while (position > 0) {
-                position -= BUFFER_SIZE;
-                raf.seek(Math.max(0L, position));
+                int readSize = (int) Math.min(BUFFER_SIZE, position);
+                position -= readSize;
+                raf.seek(position);
 
-                byte[] buffer = new byte[BUFFER_SIZE];
+                byte[] buffer = new byte[readSize];
                 raf.readFully(buffer);
 
                 for (int i = buffer.length - 1; i > 0; i--) {

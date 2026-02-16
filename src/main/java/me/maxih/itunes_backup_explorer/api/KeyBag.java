@@ -43,7 +43,7 @@ public class KeyBag {
     public final Map<ByteBuffer, Map<String, byte[]>> classKeys = new HashMap<>();
     public final Map<String, byte[]> attrs = new HashMap<>();
 
-    private boolean unlocked = false;
+    private volatile boolean unlocked = false;
 
     public KeyBag(NSData data) throws BackupReadException {
         this.parseBinaryBlob(data);
@@ -76,11 +76,15 @@ public class KeyBag {
                     buffer.get(this.uuid);
                 } else if (tag.equals("WRAP") && this.wrap == null) {
                     int length = buffer.getInt();
+                    if (length < 0 || length > buffer.remaining())
+                        throw new BackupReadException("Tamanho inválido no key bag: " + length);
 
                     this.wrap = new byte[length];
                     buffer.get(this.wrap);
                 } else if (tag.equals("UUID")) {
                     int length = buffer.getInt();
+                    if (length < 0 || length > buffer.remaining())
+                        throw new BackupReadException("Tamanho inválido no key bag: " + length);
 
                     byte[] value = new byte[length];
                     buffer.get(value);
@@ -92,6 +96,8 @@ public class KeyBag {
                     currentClassKey.put("CLAS", value);
                 } else if (CLASS_KEY_TAGS.contains(tag)) {
                     int length = buffer.getInt();
+                    if (length < 0 || length > buffer.remaining())
+                        throw new BackupReadException("Tamanho inválido no key bag: " + length);
 
                     byte[] value = new byte[length];
                     buffer.get(value);
@@ -99,6 +105,8 @@ public class KeyBag {
                     if (currentClassKey != null) currentClassKey.put(tag, value);
                 } else {
                     int length = buffer.getInt();
+                    if (length < 0 || length > buffer.remaining())
+                        throw new BackupReadException("Tamanho inválido no key bag: " + length);
 
                     byte[] value = new byte[length];
                     buffer.get(value);
@@ -119,39 +127,51 @@ public class KeyBag {
         return !this.unlocked;
     }
 
-    public void unlock(char[] passcode) throws InvalidKeyException {
+    public void unlock(char[] passcode) throws InvalidKeyException, UnsupportedCryptoException {
         try {
             byte[] salt1 = this.attrs.get("DPSL");
             int iterations1 = ByteBuffer.wrap(this.attrs.get("DPIC")).getInt();
-            KeySpec spec1 = new PBEKeySpec(passcode, salt1, iterations1, 32 * 8);
+            PBEKeySpec spec1 = new PBEKeySpec(passcode, salt1, iterations1, 32 * 8);
 
-            SecretKeyFactory f1 = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
-            SecretKey key1 = f1.generateSecret(spec1);
+            byte[] keyEncryptionKey;
+            try {
+                SecretKeyFactory f1 = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+                SecretKey key1 = f1.generateSecret(spec1);
 
-            byte[] salt2 = this.attrs.get("SALT");
-            int iterations2 = ByteBuffer.wrap(this.attrs.get("ITER")).getInt();
+                byte[] salt2 = this.attrs.get("SALT");
+                int iterations2 = ByteBuffer.wrap(this.attrs.get("ITER")).getInt();
 
-            PKCS5S2ParametersGenerator gen = new PKCS5S2ParametersGenerator(new SHA1Digest());
-            gen.init(key1.getEncoded(), salt2, iterations2);
-            byte[] keyEncryptionKey = ((KeyParameter) gen.generateDerivedParameters(32 * 8)).getKey();
-
-            Cipher c = Cipher.getInstance("AESWrap");
-
-            for (Map<String, byte[]> classKey : this.classKeys.values()) {
-                if (!classKey.containsKey("WPKY")) continue;
-                int wrap = ByteBuffer.wrap(classKey.get("WRAP")).getInt();
-                if ((wrap & WRAP_PASSCODE) != 0) {
-                    c.init(Cipher.UNWRAP_MODE, new SecretKeySpec(keyEncryptionKey, "AES"));
-                    Key contentEncryptionKey = c.unwrap(classKey.get("WPKY"), "AES", Cipher.SECRET_KEY);
-                    if (contentEncryptionKey != null) {
-                        classKey.put("KEY", contentEncryptionKey.getEncoded());
-                    }
-                }
+                PKCS5S2ParametersGenerator gen = new PKCS5S2ParametersGenerator(new SHA1Digest());
+                gen.init(key1.getEncoded(), salt2, iterations2);
+                keyEncryptionKey = ((KeyParameter) gen.generateDerivedParameters(32 * 8)).getKey();
+            } finally {
+                spec1.clearPassword();
             }
 
-            this.unlocked = true;
+            try {
+                Cipher c = Cipher.getInstance("AESWrap");
+
+                int unwrappedCount = 0;
+                for (Map<String, byte[]> classKey : this.classKeys.values()) {
+                    if (!classKey.containsKey("WPKY")) continue;
+                    int wrap = ByteBuffer.wrap(classKey.get("WRAP")).getInt();
+                    if ((wrap & WRAP_PASSCODE) != 0) {
+                        c.init(Cipher.UNWRAP_MODE, new SecretKeySpec(keyEncryptionKey, "AES"));
+                        Key contentEncryptionKey = c.unwrap(classKey.get("WPKY"), "AES", Cipher.SECRET_KEY);
+                        if (contentEncryptionKey != null) {
+                            classKey.put("KEY", contentEncryptionKey.getEncoded());
+                            unwrappedCount++;
+                        }
+                    }
+                }
+
+                if (unwrappedCount == 0) throw new InvalidKeyException("Nenhuma chave de classe desembrulhada");
+                this.unlocked = true;
+            } finally {
+                Arrays.fill(keyEncryptionKey, (byte) 0);
+            }
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | NoSuchPaddingException e) {
-            logger.error("Falha ao desbloquear KeyBag", e);
+            throw new UnsupportedCryptoException(e);
         } finally {
             Arrays.fill(passcode, '\0');
         }

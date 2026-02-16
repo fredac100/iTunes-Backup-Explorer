@@ -9,10 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
 
 import javax.xml.parsers.ParserConfigurationException;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.security.InvalidKeyException;
 import java.sql.*;
@@ -163,7 +160,7 @@ public class ITunesBackup {
         connectToDatabase();
     }
 
-    public boolean databaseConnected() {
+    public synchronized boolean databaseConnected() {
         try {
             return this.databaseCon != null && !this.databaseCon.isClosed();
         } catch (SQLException e) {
@@ -173,7 +170,7 @@ public class ITunesBackup {
         }
     }
 
-    public void connectToDatabase() throws DatabaseConnectionException {
+    public synchronized void connectToDatabase() throws DatabaseConnectionException {
         if (databaseConnected()) return;
 
         if (this.decryptedDatabaseFile == null || !this.decryptedDatabaseFile.exists())
@@ -191,7 +188,7 @@ public class ITunesBackup {
         if (!this.manifest.encrypted
                 || this.decryptedDatabaseFile == null
                 || !this.decryptedDatabaseFile.exists()
-                || this.decryptedDatabaseFile == this.manifestDBFile) return;
+                || this.decryptedDatabaseFile.equals(this.manifestDBFile)) return;
 
         try {
             if (databaseCon != null && !databaseCon.isClosed())
@@ -202,12 +199,13 @@ public class ITunesBackup {
 
         try {
             long fileSize = this.decryptedDatabaseFile.length();
-            try (FileOutputStream fos = new FileOutputStream(this.decryptedDatabaseFile)) {
-                byte[] zeros = new byte[8192];
+            byte[] zeros = new byte[65536];
+            try (BufferedOutputStream bos = new BufferedOutputStream(
+                    new FileOutputStream(this.decryptedDatabaseFile), 65536)) {
                 long remaining = fileSize;
                 while (remaining > 0) {
                     int toWrite = (int) Math.min(zeros.length, remaining);
-                    fos.write(zeros, 0, toWrite);
+                    bos.write(zeros, 0, toWrite);
                     remaining -= toWrite;
                 }
             }
@@ -219,7 +217,7 @@ public class ITunesBackup {
             logger.warn("Falha ao deletar arquivo temporário: {}", this.decryptedDatabaseFile.getAbsolutePath());
     }
 
-    private List<BackupFile> queryFiles(String sql, StatementPreparation preparation) throws DatabaseConnectionException {
+    private synchronized List<BackupFile> queryFiles(String sql, StatementPreparation preparation) throws DatabaseConnectionException {
         if (!databaseConnected()) this.connectToDatabase();
 
         try (PreparedStatement statement = this.databaseCon.prepareStatement(sql)) {
@@ -280,11 +278,23 @@ public class ITunesBackup {
     }
 
     public List<BackupFile> queryDomainRoots() throws DatabaseConnectionException {
-        return queryFiles("SELECT * FROM files WHERE `relativePath` = \"\" ORDER BY `domain`", statement -> {});
+        return queryFiles("SELECT * FROM files WHERE `relativePath` = ? ORDER BY `domain`",
+                statement -> statement.setString(1, ""));
     }
 
     public List<BackupFile> queryAllFiles() throws DatabaseConnectionException {
         return queryFiles("SELECT * FROM files ORDER BY `domain`, `relativePath`", statement -> {});
+    }
+
+    public long[] queryFileStats() throws DatabaseConnectionException {
+        if (!databaseConnected()) this.connectToDatabase();
+        try (Statement stmt = this.databaseCon.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM files")) {
+            long count = rs.next() ? rs.getLong(1) : 0;
+            return new long[]{count, -1};
+        } catch (SQLException e) {
+            throw new DatabaseConnectionException(e);
+        }
     }
 
     public List<BackupFile> queryDomainFiles(boolean withDomainRoot, String... domains) throws DatabaseConnectionException {

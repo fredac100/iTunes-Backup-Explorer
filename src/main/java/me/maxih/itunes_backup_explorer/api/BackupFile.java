@@ -89,6 +89,7 @@ public class BackupFile {
 
     private <T extends NSObject> T getObject(Class<T> type, UID uid) throws NoSuchElementException {
         int index = uidToIndex(uid);
+        if (index < 0 || index >= this.objects.length) throw new NoSuchElementException();
         Object obj = this.objects[index];
         if (type.isInstance(obj)) return type.cast(obj);
         throw new NoSuchElementException();
@@ -242,6 +243,10 @@ public class BackupFile {
             }
         }
         File destination = new File(destinationFolder.getAbsolutePath(), relative);
+        if (!destination.getCanonicalPath().startsWith(destinationFolder.getCanonicalPath() + File.separator)
+                && !destination.getCanonicalPath().equals(destinationFolder.getCanonicalPath())) {
+            throw new IOException("Path traversal detectado: " + relative);
+        }
         if (destination.exists() && this.fileType != FileType.DIRECTORY)
             throw new FileAlreadyExistsException(destination.getAbsolutePath());
 
