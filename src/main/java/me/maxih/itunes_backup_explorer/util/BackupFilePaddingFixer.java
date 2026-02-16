@@ -1,10 +1,14 @@
 package me.maxih.itunes_backup_explorer.util;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 
 public class BackupFilePaddingFixer {
+    private static final Logger logger = LoggerFactory.getLogger(BackupFilePaddingFixer.class);
     private static final int BUFFER_SIZE = 1024;
 
     /**
@@ -44,15 +48,15 @@ public class BackupFilePaddingFixer {
             raf.seek(actualSize - 1);
             int paddingNumber = raf.read();
 
-            System.out.println("Assuming padding of " + paddingNumber + " bytes.");
+            logger.debug("Assumindo padding de {} bytes", paddingNumber);
 
             if (actualSize < paddingNumber) {
-                System.out.println("File is too small.");
+                logger.debug("Arquivo muito pequeno");
                 return;
             }
 
             if (actualSize % 16 != 0) {
-                System.out.println("Actual size is not a multiple of 16. File is not padded correctly.");
+                logger.debug("Tamanho real não é múltiplo de 16. Arquivo não está com padding correto");
                 return;
             }
 
@@ -63,7 +67,7 @@ public class BackupFilePaddingFixer {
 
             for (int i = 0; i < paddingNumber; i++) {
                 if (paddingBytes[i] != paddingNumber) {
-                    System.out.println("Padding byte #" + i + " invalid: " + paddingBytes[i] + " != " + paddingNumber);
+                    logger.debug("Padding byte #{} inválido: {} != {}", i, paddingBytes[i], paddingNumber);
                     return;
                 }
             }

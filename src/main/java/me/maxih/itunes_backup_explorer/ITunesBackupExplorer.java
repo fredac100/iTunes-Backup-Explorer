@@ -21,7 +21,7 @@ public class ITunesBackupExplorer extends Application {
         Parent root = fxmlLoader.load();
         controller = fxmlLoader.getController();
 
-        scene = new Scene(root, 800, 500);
+        scene = new Scene(root, 1200, 700);
         stage.setScene(scene);
         stage.setTitle("iTunes Backup Explorer");
         stage.setMinWidth(500);

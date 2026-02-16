@@ -4,6 +4,8 @@ import com.dd.plist.BinaryPropertyListWriter;
 import com.dd.plist.NSDictionary;
 import com.dd.plist.PropertyListFormatException;
 import com.dd.plist.PropertyListParser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.xml.sax.SAXException;
 
 import javax.xml.parsers.ParserConfigurationException;
@@ -19,6 +21,8 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class ITunesBackup {
+    private static final Logger logger = LoggerFactory.getLogger(ITunesBackup.class);
+
     public static List<ITunesBackup> getBackups(File backupRoot) {
         if (!backupRoot.isDirectory()) return new ArrayList<>();
 
@@ -32,7 +36,7 @@ public class ITunesBackup {
                     } catch (FileNotFoundException e) {
                         return null;
                     } catch (BackupReadException e) {
-                        e.printStackTrace();
+                        logger.error("Falha ao parsear manifest do backup em {}", dir.getAbsolutePath(), e);
                         return null;
                     }
                 })
@@ -71,10 +75,10 @@ public class ITunesBackup {
             try {
                 this.loadInfo();
             } catch (BackupReadException e) {
-                e.printStackTrace();
+                logger.error("Falha ao parsear Info.plist", e);
             }
         } else {
-            System.out.println("The file '" + this.backupInfoFile.getAbsolutePath() + "' was not found. Trying to load the backup anyway.");
+            logger.warn("Info.plist não encontrado: {}. Tentando carregar o backup mesmo assim.", this.backupInfoFile.getAbsolutePath());
         }
 
         if (this.manifest.encrypted && this.manifest.getKeyBag().isEmpty())
@@ -144,7 +148,7 @@ public class ITunesBackup {
                 this.databaseCon.close();
                 this.databaseCon = null;
             } catch (SQLException e) {
-                e.printStackTrace();
+                logger.error("Falha ao re-encriptar banco de dados", e);
             }
         }
 
@@ -161,7 +165,7 @@ public class ITunesBackup {
         try {
             return this.databaseCon != null && !this.databaseCon.isClosed();
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Falha ao descriptografar banco de dados", e);
             this.databaseCon = null;
             return false;
         }
@@ -175,7 +179,7 @@ public class ITunesBackup {
 
         try {
             databaseCon = DriverManager.getConnection("jdbc:sqlite:" + decryptedDatabaseFile.getCanonicalPath());
-            System.out.println("Connection to the backup database of '" + this.manifest.deviceName + "' has been established.");
+            logger.info("Conexão com banco de dados estabelecida para dispositivo '{}'", this.manifest.deviceName);
         } catch (SQLException | IOException e) {
             throw new DatabaseConnectionException(e);
         }
@@ -191,11 +195,11 @@ public class ITunesBackup {
             if (databaseCon != null && !databaseCon.isClosed())
                 this.databaseCon.close();
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Falha ao fechar conexão com banco", e);
         }
 
         if (!this.decryptedDatabaseFile.delete())
-            System.out.println("Could not delete temporary file " + this.decryptedDatabaseFile.getAbsolutePath());
+            logger.warn("Falha ao deletar arquivo temporário: {}", this.decryptedDatabaseFile.getAbsolutePath());
     }
 
     private List<BackupFile> queryFiles(String sql, StatementPreparation preparation) throws DatabaseConnectionException {
@@ -219,16 +223,16 @@ public class ITunesBackup {
                             (NSDictionary) PropertyListParser.parse(result.getBinaryStream(5))
                     ));
                 } catch (BackupReadException e) {
-                    System.err.println(e.getMessage());
+                    logger.error("Falha ao ler backup: {}", e.getMessage());
                 } catch (IOException | PropertyListFormatException | ParseException | ParserConfigurationException |
                          SAXException e) {
-                    e.printStackTrace();
+                    logger.error("Falha ao consultar backups", e);
                 }
             }
 
             return backupFiles;
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Falha ao conectar ao banco de dados", e);
             return new ArrayList<>(0);
         }
     }
@@ -245,6 +249,10 @@ public class ITunesBackup {
 
     public List<BackupFile> queryDomainRoots() throws DatabaseConnectionException {
         return queryFiles("SELECT * FROM files WHERE `relativePath` = \"\" ORDER BY `domain`", statement -> {});
+    }
+
+    public List<BackupFile> queryAllFiles() throws DatabaseConnectionException {
+        return queryFiles("SELECT * FROM files ORDER BY `domain`, `relativePath`", statement -> {});
     }
 
     public List<BackupFile> queryDomainFiles(boolean withDomainRoot, String... domains) throws DatabaseConnectionException {
@@ -301,7 +309,7 @@ public class ITunesBackup {
             statement.setString(2, fileID);
             statement.executeUpdate();
         } catch (SQLException | IOException e) {
-            e.printStackTrace();
+            logger.error("Falha ao atualizar informações do arquivo", e);
         }
     }
 
@@ -313,7 +321,7 @@ public class ITunesBackup {
             statement.setString(1, fileID);
             statement.executeUpdate();
         } catch (SQLException e) {
-            e.printStackTrace();
+            logger.error("Falha ao remover arquivo do banco", e);
         }
     }
 

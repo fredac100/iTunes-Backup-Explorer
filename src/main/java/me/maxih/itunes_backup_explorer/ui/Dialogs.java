@@ -9,6 +9,7 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.WindowEvent;
@@ -51,6 +52,7 @@ public class Dialogs {
     }
 
     public static class ProgressAlert extends Stage {
+        private Label messageLabel;
 
         public ProgressAlert(String title, Task<?> task, EventHandler<WindowEvent> cancelEventHandler) {
             this.initModality(Modality.APPLICATION_MODAL);
@@ -60,14 +62,23 @@ public class Dialogs {
             this.getIcons().add(ITunesBackupExplorer.APP_ICON);
 
             ProgressBar bar = new ProgressBar();
-            bar.setPrefSize(250, 50);
+            bar.setPrefWidth(250);
             bar.setPadding(new Insets(10));
             bar.progressProperty().bind(task.progressProperty());
+
+            messageLabel = new Label();
+            messageLabel.setPadding(new Insets(5, 10, 5, 10));
+            messageLabel.textProperty().bind(task.messageProperty());
+
+            VBox container = new VBox(messageLabel, bar);
+            container.setAlignment(Pos.CENTER);
+            container.setPadding(new Insets(10));
+
             task.runningProperty().addListener((observable, oldValue, newValue) -> {
                 if (oldValue && !newValue) this.close();
             });
 
-            this.setScene(new Scene(bar));
+            this.setScene(new Scene(container));
         }
         public ProgressAlert(String title, Task<?> task, boolean cancellable) {
             this(title, task, cancellable ? event -> task.cancel() : Event::consume);

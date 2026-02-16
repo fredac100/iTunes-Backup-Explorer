@@ -8,6 +8,8 @@ import javafx.scene.layout.HBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 import me.maxih.itunes_backup_explorer.api.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.awt.*;
 import java.io.File;
@@ -18,6 +20,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 public class FileActions {
+    private static final Logger logger = LoggerFactory.getLogger(FileActions.class);
 
     public static void openFile(BackupFile file) {
         try {
@@ -28,7 +31,7 @@ public class FileActions {
             Desktop.getDesktop().open(tempFile);
         } catch (IOException | UnsupportedCryptoException | NotUnlockedException |
                  BackupReadException exception) {
-            exception.printStackTrace();
+            logger.error("Falha ao abrir arquivo", exception);
             Dialogs.showAlert(Alert.AlertType.ERROR, exception.getMessage(), ButtonType.OK);
         }
     }
@@ -45,7 +48,7 @@ public class FileActions {
         try {
             file.extract(destination);
         } catch (IOException | BackupReadException | NotUnlockedException | UnsupportedCryptoException e) {
-            e.printStackTrace();
+            logger.error("Falha ao extrair arquivo", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage(), ButtonType.OK);
         }
     }
@@ -63,7 +66,7 @@ public class FileActions {
             file.backup.reEncryptDatabase();
         } catch (IOException | BackupReadException | NotUnlockedException | UnsupportedCryptoException |
                  DatabaseConnectionException e) {
-            e.printStackTrace();
+            logger.error("Falha ao substituir arquivo", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage(), ButtonType.OK);
         }
     }
@@ -120,7 +123,7 @@ public class FileActions {
             removeCallback.accept(deletedFileIDs);
         } catch (IOException | DatabaseConnectionException | BackupReadException | UnsupportedCryptoException |
                  NotUnlockedException e) {
-            e.printStackTrace();
+            logger.error("Falha ao deletar arquivo", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage(), ButtonType.OK);
         }
     }
@@ -131,7 +134,7 @@ public class FileActions {
         if (files == null) return;
 
         for (File file : files) {
-            System.out.println(file.getAbsolutePath());
+            logger.info("Inserindo arquivo: {}", file.getAbsolutePath());
             // TODO: insert files
         }
     }

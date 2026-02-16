@@ -3,6 +3,8 @@ package me.maxih.itunes_backup_explorer.api;
 import com.dd.plist.*;
 import me.maxih.itunes_backup_explorer.util.BackupPathUtils;
 import me.maxih.itunes_backup_explorer.util.UtilDict;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.ByteBuffer;
@@ -15,6 +17,7 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 
 public class BackupFile {
+    private static final Logger logger = LoggerFactory.getLogger(BackupFile.class);
     public final ITunesBackup backup;
     public final UtilDict data;
     public final String fileID;
@@ -186,6 +189,11 @@ public class BackupFile {
                 } else {
                     Files.copy(this.contentFile.toPath(), destination.toPath(),
                             StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.COPY_ATTRIBUTES);
+
+                    this.properties.get(NSNumber.class, "LastModified")
+                            .map(NSNumber::longValue)
+                            .map(seconds -> seconds * 1000)
+                            .ifPresent(destination::setLastModified);
                 }
                 break;
             case SYMBOLIC_LINK:
@@ -206,7 +214,7 @@ public class BackupFile {
                 relative = withRelativePath
                         ? Paths.get(this.domain, BackupPathUtils.cleanPath(this.relativePath)).toString()
                         : BackupPathUtils.cleanPath(this.getFileName());
-                System.out.println("Continuing with invalid characters replaced: " + this.getFileName() + " -> " + relative);
+                logger.warn("Continuando com caracteres inválidos substituídos: {} -> {}", this.getFileName(), relative);
             } catch (InvalidPathException e1) {
                 throw new IOException("Invalid character in filename, failed to replace", e1);
             }
@@ -261,7 +269,7 @@ public class BackupFile {
         try {
             this.backupOriginal(true);
         } catch (FileNotFoundException e) {
-            System.out.printf("Warning: Deleted backup file '%s' did not have a content file%n", this.relativePath);
+            logger.warn("Arquivo de backup deletado '{}' não tinha arquivo de conteúdo", this.relativePath);
         }
         this.backup.removeFileFromDatabase(this.fileID);
     }

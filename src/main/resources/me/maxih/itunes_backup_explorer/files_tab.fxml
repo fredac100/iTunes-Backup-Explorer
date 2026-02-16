@@ -12,8 +12,12 @@
             <TreeView fx:id="filesTreeView" editable="true" prefHeight="200.0" prefWidth="200.0" showRoot="false"/>
         </items>
     </SplitPane>
-    <Button layoutX="14.0" layoutY="413.0" mnemonicParsing="false" onAction="#exportSelectedDomains"
-            text="Export selected domains" AnchorPane.bottomAnchor="14.0" AnchorPane.leftAnchor="14.0"/>
-    <Button layoutX="648.0" layoutY="413.0" mnemonicParsing="false" onAction="#exportSelectedFiles"
-            text="Export selected files" AnchorPane.bottomAnchor="14.0" AnchorPane.rightAnchor="14.0"/>
+    <HBox spacing="10" AnchorPane.bottomAnchor="14.0" AnchorPane.leftAnchor="14.0">
+        <Button mnemonicParsing="false" onAction="#exportSelectedDomains" text="Export selected domains"/>
+        <Label fx:id="selectedDomainsCount" text="0 domains selected" styleClass="info-label"/>
+    </HBox>
+    <HBox spacing="10" AnchorPane.bottomAnchor="14.0" AnchorPane.rightAnchor="14.0">
+        <Label fx:id="selectedFilesCount" text="0 files selected" styleClass="info-label"/>
+        <Button mnemonicParsing="false" onAction="#exportSelectedFiles" text="Export selected files"/>
+    </HBox>
 </AnchorPane>

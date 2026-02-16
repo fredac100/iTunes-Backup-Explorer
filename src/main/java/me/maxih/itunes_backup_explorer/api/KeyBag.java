@@ -3,6 +3,8 @@ package me.maxih.itunes_backup_explorer.api;
 import com.dd.plist.NSData;
 import me.maxih.itunes_backup_explorer.util.BackupFilePaddingFixer;
 import org.bouncycastle.crypto.digests.SHA1Digest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.bouncycastle.crypto.generators.PKCS5S2ParametersGenerator;
 import org.bouncycastle.crypto.params.KeyParameter;
 
@@ -25,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class KeyBag {
+    private static final Logger logger = LoggerFactory.getLogger(KeyBag.class);
     private static final Set<String> CLASS_KEY_TAGS = Set.of("CLAS", "WRAP", "WPKY", "KTYP", "PBKY");
     private static final int WRAP_DEVICE = 1;
     private static final int WRAP_PASSCODE = 2;
@@ -150,7 +153,7 @@ public class KeyBag {
 
             this.unlocked = true;
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | NoSuchPaddingException e) {
-            e.printStackTrace();
+            logger.error("Falha ao desbloquear KeyBag", e);
         }
     }
 
@@ -206,7 +209,7 @@ public class KeyBag {
             outputStream.flush();
 
             if (size != -1L && fileOutputStream.getChannel().size() != size) {
-                System.out.printf("Warning: File size from database doesn't match actual decrypted size - expected %9d, got %9d (%s)%n", size, fileOutputStream.getChannel().size(), destination.getPath());
+                logger.warn("Tamanho do arquivo no banco não corresponde ao tamanho descriptografado - esperado {}, obtido {} ({})", size, fileOutputStream.getChannel().size(), destination.getPath());
             }
 
             BackupFilePaddingFixer.tryFixPadding(destination);
@@ -225,12 +228,12 @@ public class KeyBag {
             outputStream.flush();
 
             if (size != -1L && fileOutputStream.getChannel().size() != size) {
-                System.out.printf("Warning: File size from database doesn't match actual decrypted size - expected %9d, got %9d (%s)%n", size, fileOutputStream.getChannel().size(), destination.getPath());
+                logger.warn("Tamanho do arquivo no banco não corresponde ao tamanho descriptografado - esperado {}, obtido {} ({})", size, fileOutputStream.getChannel().size(), destination.getPath());
             }
         } catch (IOException e) {
             if (e.getCause() instanceof BadPaddingException) {
-                System.out.println("Warning: Bad padding - " + e.getMessage() + " (" + destination.getPath() + ")");
-                System.out.println("Trying to decrypt again without padding...");
+                logger.warn("Bad padding - {} ({})", e.getMessage(), destination.getPath());
+                logger.debug("Tentando descriptografar novamente sem padding...");
                 decryptFilePaddingFallback(protectionClass, persistentKey, source, destination, size);
             } else {
                 throw e;

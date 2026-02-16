@@ -11,6 +11,10 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.*;
+import javafx.scene.input.*;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCodeCombination;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.AnchorPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
@@ -21,8 +25,10 @@ import me.maxih.itunes_backup_explorer.api.BackupReadException;
 import me.maxih.itunes_backup_explorer.api.ITunesBackup;
 import me.maxih.itunes_backup_explorer.api.NotUnlockedException;
 import me.maxih.itunes_backup_explorer.api.UnsupportedCryptoException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.awt.*;
+import java.awt.Desktop;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -33,6 +39,7 @@ import java.util.List;
 import java.util.*;
 
 public class WindowController {
+    private static final Logger logger = LoggerFactory.getLogger(WindowController.class);
     static final DateFormat BACKUP_DATE_FMT = new SimpleDateFormat("dd.MM.yyyy HH:mm");
 
     List<ITunesBackup> backups = new ArrayList<>();
@@ -62,6 +69,17 @@ public class WindowController {
     @FXML
     FilesTabController filesTabPageController;
 
+    @FXML
+    AnchorPane appsTabPage;
+    @FXML
+    AppsTabController appsTabPageController;
+
+    @FXML
+    Label statusTotalFiles;
+    @FXML
+    Label statusBackupSize;
+    @FXML
+    Label statusEncryption;
 
     @FXML
     public void initialize() {
@@ -73,10 +91,76 @@ public class WindowController {
                 this.tabPane.getSelectionModel().select(oldTab);
             else if (tabPage == this.filesTabPage) this.filesTabPageController.tabShown(this.selectedBackup);
             else if (tabPage == this.fileSearchTabPage) this.fileSearchTabPageController.tabShown(this.selectedBackup);
+            else if (tabPage == this.appsTabPage) this.appsTabPageController.tabShown(this.selectedBackup);
         });
 
         this.tabPane.setVisible(false);
         this.loadBackups();
+        setupKeyboardShortcuts();
+        setupDragAndDrop();
+    }
+
+    private void setupKeyboardShortcuts() {
+        Platform.runLater(() -> {
+            Scene scene = tabPane.getScene();
+            if (scene != null) {
+                scene.getAccelerators().put(new KeyCodeCombination(KeyCode.O, KeyCombination.CONTROL_DOWN), this::fileOpenBackup);
+                scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F, KeyCombination.CONTROL_DOWN), () -> tabPane.getSelectionModel().select(2));
+                scene.getAccelerators().put(new KeyCodeCombination(KeyCode.Q, KeyCombination.CONTROL_DOWN), this::quit);
+                scene.getAccelerators().put(new KeyCodeCombination(KeyCode.F5), this::loadBackups);
+            }
+        });
+    }
+
+    private void setupDragAndDrop() {
+        backupSidebarBox.setOnDragOver(event -> {
+            if (event.getGestureSource() != backupSidebarBox && event.getDragboard().hasFiles()) {
+                event.acceptTransferModes(TransferMode.COPY);
+            }
+            event.consume();
+        });
+
+        backupSidebarBox.setOnDragEntered(event -> {
+            if (event.getGestureSource() != backupSidebarBox && event.getDragboard().hasFiles()) {
+                backupSidebarBox.getStyleClass().add("drag-over");
+            }
+            event.consume();
+        });
+
+        backupSidebarBox.setOnDragExited(event -> {
+            backupSidebarBox.getStyleClass().remove("drag-over");
+            event.consume();
+        });
+
+        backupSidebarBox.setOnDragDropped(event -> {
+            Dragboard db = event.getDragboard();
+            boolean success = false;
+            if (db.hasFiles()) {
+                for (File file : db.getFiles()) {
+                    if (file.isDirectory()) {
+                        openBackup(file);
+                        success = true;
+                    } else if (file.getName().equals("Manifest.plist") || file.getName().equals("Manifest.db")) {
+                        openBackup(file.getParentFile());
+                        success = true;
+                    }
+                }
+            }
+            event.setDropCompleted(success);
+            event.consume();
+        });
+    }
+
+    private void openBackup(File backupDirectory) {
+        try {
+            ITunesBackup backup = new ITunesBackup(backupDirectory);
+            this.loadBackup(backup);
+            this.selectBackup(backup);
+        } catch (FileNotFoundException e) {
+            Dialogs.showAlert(Alert.AlertType.ERROR, "O arquivo não foi encontrado: " + e.getMessage());
+        } catch (BackupReadException e) {
+            Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
+        }
     }
 
     public void cleanUp() {
@@ -99,7 +183,7 @@ public class WindowController {
             try {
                 Desktop.getDesktop().browse(backup.directory.toURI());
             } catch (IOException e) {
-                e.printStackTrace();
+                logger.error("Falha ao abrir diretório do backup", e);
             }
         });
 
@@ -153,7 +237,7 @@ public class WindowController {
         } catch (UnsupportedCryptoException e) {
             Dialogs.showAlert(Alert.AlertType.ERROR, "Your system doesn't support the necessary cryptography");
         } catch (NotUnlockedException e) {
-            e.printStackTrace();
+            logger.error("Backup não desbloqueado", e);
         } catch (IOException e) {
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
         }
@@ -168,6 +252,7 @@ public class WindowController {
         this.selectedBackup = backup;
 
         this.infoTabPageController.updateInformation(backup.manifest, backup.getBackupInfo().orElse(null));
+        this.updateStatusBar();
 
         Node selectedTabPage = this.tabPane.getSelectionModel().getSelectedItem().getContent();
         if (this.lockedTabPages.contains(selectedTabPage) && !this.tryUnlock())
@@ -200,13 +285,13 @@ public class WindowController {
             prefsWindow.initModality(Modality.APPLICATION_MODAL);
             prefsWindow.initOwner(tabPane.getScene().getWindow());
 
-            Scene prefsScene = new Scene(root, 600, 400);
+            Scene prefsScene = new Scene(root, 650, 550);
             prefsWindow.setScene(prefsScene);
             prefsWindow.setTitle("Preferences");
             prefsWindow.getIcons().add(ITunesBackupExplorer.APP_ICON);
             prefsWindow.show();
         } catch (IOException e) {
-            e.printStackTrace();
+            logger.error("Falha ao carregar preferências", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
         }
     }
@@ -233,5 +318,40 @@ public class WindowController {
     public void quit() {
         this.cleanUp();
         Platform.exit();
+    }
+
+    @FXML
+    public void helpAbout() {
+        Alert about = new Alert(Alert.AlertType.INFORMATION);
+        about.setTitle("About iTunes Backup Explorer");
+        about.setHeaderText("iTunes Backup Explorer v2.0");
+        about.setContentText(
+            "Desenvolvido originalmente por maxih\n\n" +
+            "Licença: MIT\n\n" +
+            "GitHub: https://github.com/MaxiHuHe04/iTunes-Backup-Explorer"
+        );
+        ((Stage) about.getDialogPane().getScene().getWindow()).getIcons().add(ITunesBackupExplorer.APP_ICON);
+        about.showAndWait();
+    }
+
+    private void updateStatusBar() {
+        if (selectedBackup == null) {
+            statusTotalFiles.setText("Total files: --");
+            statusBackupSize.setText("Size: --");
+            statusEncryption.setText("Encryption: --");
+            return;
+        }
+
+        try {
+            int totalFiles = selectedBackup.queryAllFiles().size();
+            statusTotalFiles.setText("Total files: " + totalFiles);
+        } catch (Exception e) {
+            statusTotalFiles.setText("Total files: --");
+        }
+
+        statusBackupSize.setText("Size: --");
+
+        String encryptionStatus = selectedBackup.manifest.encrypted ? "Encrypted" : "Not encrypted";
+        statusEncryption.setText("Encryption: " + encryptionStatus);
     }
 }

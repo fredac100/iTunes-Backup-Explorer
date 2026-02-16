@@ -24,7 +24,7 @@
                     <MenuItem mnemonicParsing="false" text="Unselect All"/>
                 </Menu>
                 <Menu mnemonicParsing="false" text="Help">
-                    <MenuItem mnemonicParsing="false" text="About iTunes Backup Explorer"/>
+                    <MenuItem mnemonicParsing="false" onAction="#helpAbout" text="About iTunes Backup Explorer"/>
                 </Menu>
             </MenuBar>
         </top>
@@ -48,9 +48,16 @@
                     <fx:include fx:id="fileSearchTabPage" source="file_search_tab.fxml"/>
                 </Tab>
                 <Tab text="Apps">
-                    <AnchorPane/>
+                    <fx:include fx:id="appsTabPage" source="apps_tab.fxml"/>
                 </Tab>
             </TabPane>
         </center>
+        <bottom>
+            <HBox styleClass="status-bar" BorderPane.alignment="CENTER">
+                <Label fx:id="statusTotalFiles" text="Total files: --"/>
+                <Label fx:id="statusBackupSize" text="Size: --"/>
+                <Label fx:id="statusEncryption" text="Encryption: --"/>
+            </HBox>
+        </bottom>
     </BorderPane>
 </VBox>
