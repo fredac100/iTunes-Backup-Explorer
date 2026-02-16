@@ -79,7 +79,7 @@ public class AppsTabController {
     }
 
     public void tabShown(ITunesBackup backup) {
-        if (backup == this.selectedBackup) return;
+        if (backup == this.selectedBackup && !this.appListView.getItems().isEmpty()) return;
 
         this.selectedBackup = backup;
         this.appListView.getItems().clear();
@@ -234,8 +234,11 @@ public class AppsTabController {
 
         DirectoryChooser chooser = new DirectoryChooser();
         chooser.setTitle("Selecione o diretório de destino");
+        File lastDirectory = PreferencesController.getLastExportDirectory();
+        if (lastDirectory != null) chooser.setInitialDirectory(lastDirectory);
         File destination = chooser.showDialog(appFilesTree.getScene().getWindow());
         if (destination == null) return;
+        PreferencesController.setLastExportDirectory(destination);
 
         Task<Void> exportTask = new Task<>() {
             @Override
@@ -243,7 +246,9 @@ public class AppsTabController {
                 List<BackupFile> files = selectedBackup.queryDomainFiles(false, domain);
                 ButtonType skipButtonType = new ButtonType("Skip", ButtonBar.ButtonData.NEXT_FORWARD);
                 ButtonType skipAllExistingButtonType = new ButtonType("Skip all existing", ButtonBar.ButtonData.NEXT_FORWARD);
-                boolean skipExisting = false;
+                boolean skipExisting = PreferencesController.getSkipExistingFiles();
+                boolean withRelativePath = PreferencesController.getCreateDirectoryStructure();
+                boolean preserveTimestamps = PreferencesController.getPreserveTimestamps();
 
                 for (int i = 0; i < files.size(); i++) {
                     if (isCancelled()) break;
@@ -252,7 +257,7 @@ public class AppsTabController {
                         BackupFile file = files.get(i);
                         updateMessage("Exportando arquivo " + (i + 1) + " de " + files.size() + ": " + file.relativePath);
 
-                        file.extractToFolder(destination, true);
+                        file.extractToFolder(destination, withRelativePath, preserveTimestamps);
                         updateProgress(i + 1, files.size());
                     } catch (ClosedByInterruptException e) {
                         break;

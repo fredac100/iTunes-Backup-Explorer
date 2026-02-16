@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -111,9 +112,22 @@ public class FileSearchTabController {
                 searchResult = filterByFileType(searchResult, selectedFileType);
             }
 
+            if (!PreferencesController.getSearchIncludeNonFiles()) {
+                searchResult = searchResult.stream()
+                        .filter(file -> file.getFileType() == BackupFile.FileType.FILE)
+                        .collect(Collectors.toList());
+            }
+
+            int totalResults = searchResult.size();
+            int resultLimit = PreferencesController.getSearchResultLimit();
+            boolean limited = resultLimit > 0 && totalResults > resultLimit;
+            if (limited) {
+                searchResult = searchResult.subList(0, resultLimit);
+            }
+
             this.filesTable.setItems(FXCollections.observableList(searchResult.stream().map(BackupFileEntry::new).collect(Collectors.toList())));
 
-            updateResultsCount(searchResult.size());
+            updateResultsCount(searchResult.size(), totalResults);
         } catch (DatabaseConnectionException e) {
             logger.error("Falha ao buscar arquivos", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
@@ -162,9 +176,13 @@ public class FileSearchTabController {
             .collect(Collectors.toList());
     }
 
-    private void updateResultsCount(int count) {
+    private void updateResultsCount(int shownCount, int totalCount) {
         if (searchResultsCount != null) {
-            searchResultsCount.setText(count + " result" + (count != 1 ? "s" : ""));
+            if (shownCount != totalCount) {
+                searchResultsCount.setText(shownCount + "/" + totalCount + " results (limited)");
+            } else {
+                searchResultsCount.setText(shownCount + " result" + (shownCount != 1 ? "s" : ""));
+            }
         }
     }
 
@@ -173,14 +191,22 @@ public class FileSearchTabController {
         if (this.filesTable.getItems().size() == 0) return;
 
         DirectoryChooser chooser = new DirectoryChooser();
+        File lastDirectory = PreferencesController.getLastExportDirectory();
+        if (lastDirectory != null) chooser.setInitialDirectory(lastDirectory);
         File destination = chooser.showDialog(this.filesTable.getScene().getWindow());
 
         if (destination == null || !destination.exists()) return;
+        PreferencesController.setLastExportDirectory(destination);
 
+        boolean withRelativePath = PreferencesController.getCreateDirectoryStructure();
+        boolean preserveTimestamps = PreferencesController.getPreserveTimestamps();
+        boolean skipExisting = PreferencesController.getSkipExistingFiles();
         this.filesTable.getItems().forEach(backupFile -> {
             if (backupFile.getFile().isEmpty()) return;
             try {
-                backupFile.getFile().get().extractToFolder(destination, true);
+                backupFile.getFile().get().extractToFolder(destination, withRelativePath, preserveTimestamps);
+            } catch (FileAlreadyExistsException e) {
+                if (!skipExisting) Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage(), ButtonType.OK);
             } catch (IOException | BackupReadException | NotUnlockedException | UnsupportedCryptoException e) {
                 logger.error("Falha ao exportar arquivo correspondente", e);
                 Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage(), ButtonType.OK);
@@ -251,9 +277,21 @@ public class FileSearchTabController {
                 .filter(file -> seenIds.add(file.fileID))
                 .collect(Collectors.toList());
 
+            if (!PreferencesController.getSearchIncludeNonFiles()) {
+                uniqueResults = uniqueResults.stream()
+                        .filter(file -> file.getFileType() == BackupFile.FileType.FILE)
+                        .collect(Collectors.toList());
+            }
+
+            int totalResults = uniqueResults.size();
+            int resultLimit = PreferencesController.getSearchResultLimit();
+            if (resultLimit > 0 && uniqueResults.size() > resultLimit) {
+                uniqueResults = uniqueResults.subList(0, resultLimit);
+            }
+
             this.filesTable.setItems(FXCollections.observableList(uniqueResults.stream().map(BackupFileEntry::new).collect(Collectors.toList())));
 
-            updateResultsCount(uniqueResults.size());
+            updateResultsCount(uniqueResults.size(), totalResults);
 
             domainComboBox.setValue(domain);
             relativePathQueryField.setText("");
@@ -265,11 +303,11 @@ public class FileSearchTabController {
     }
 
     public void tabShown(ITunesBackup backup) {
-        if (backup == this.selectedBackup) return;
+        if (backup == this.selectedBackup && this.filesTable.getItems() != null) return;
 
         this.filesTable.setItems(null);
         this.selectedBackup = backup;
-        updateResultsCount(0);
+        updateResultsCount(0, 0);
 
         populateDomainComboBox();
     }

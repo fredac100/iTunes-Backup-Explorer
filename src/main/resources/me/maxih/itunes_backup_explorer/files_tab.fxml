@@ -4,14 +4,28 @@
 <?import javafx.scene.layout.*?>
 <AnchorPane xmlns="http://javafx.com/javafx/10.0.2-internal" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="me.maxih.itunes_backup_explorer.ui.FilesTabController">
-    <SplitPane fx:id="splitPane" dividerPositions="0.4" layoutX="14.0" layoutY="14.0" AnchorPane.bottomAnchor="53.0"
-               AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="0.0">
+    <VBox spacing="10" AnchorPane.leftAnchor="14.0" AnchorPane.topAnchor="10.0" AnchorPane.rightAnchor="14.0">
+        <HBox spacing="8" alignment="CENTER_LEFT">
+            <Label text="Filter" styleClass="info-label"/>
+            <TextField fx:id="fileFilterField" prefWidth="280.0" promptText="Filter by path or filename"/>
+            <CheckBox fx:id="filesOnlyFilterCheckBox" text="Files only"/>
+            <Label text="Sort" styleClass="info-label"/>
+            <ComboBox fx:id="sortComboBox" prefWidth="180.0"/>
+            <Button text="Expand all" onAction="#expandAllFiles"/>
+            <Button text="Collapse all" onAction="#collapseAllFiles"/>
+            <Button text="Reset" onAction="#clearFileFilter"/>
+        </HBox>
+        <Label fx:id="selectedDomainSummary" text="No domain selected" styleClass="info-label"/>
+    </VBox>
+
+    <SplitPane fx:id="splitPane" dividerPositions="0.35" AnchorPane.bottomAnchor="53.0"
+               AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="74.0">
         <items>
-            <TreeView fx:id="domainsTreeView" editable="true" prefHeight="400.0" prefWidth="600.0" showRoot="false"
-                      SplitPane.resizableWithParent="false"/>
-            <TreeView fx:id="filesTreeView" editable="true" prefHeight="200.0" prefWidth="200.0" showRoot="false"/>
+            <TreeView fx:id="domainsTreeView" editable="true" prefHeight="400.0" prefWidth="350.0" showRoot="false"/>
+            <TreeView fx:id="filesTreeView" editable="true" prefHeight="400.0" prefWidth="650.0" showRoot="false"/>
         </items>
     </SplitPane>
+
     <HBox spacing="10" AnchorPane.bottomAnchor="14.0" AnchorPane.leftAnchor="14.0">
         <Button mnemonicParsing="false" onAction="#exportSelectedDomains" text="Export selected domains"/>
         <Label fx:id="selectedDomainsCount" text="0 domains selected" styleClass="info-label"/>

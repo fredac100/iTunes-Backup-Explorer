@@ -1,6 +1,7 @@
 package me.maxih.itunes_backup_explorer.ui;
 
 import javafx.application.Platform;
+import javafx.collections.FXCollections;
 import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.geometry.Pos;
@@ -12,6 +13,7 @@ import javafx.stage.DirectoryChooser;
 import me.maxih.itunes_backup_explorer.api.*;
 import me.maxih.itunes_backup_explorer.util.BackupPathUtils;
 import me.maxih.itunes_backup_explorer.util.CollectionUtils;
+import me.maxih.itunes_backup_explorer.util.FileSize;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,9 +28,10 @@ import java.util.stream.Stream;
 
 public class FilesTabController {
     private static final Logger logger = LoggerFactory.getLogger(FilesTabController.class);
-    private ITunesBackup selectedBackup;
 
-    Task<TreeItem<BackupFileEntry>> loadDomainFilesTask;
+    private ITunesBackup selectedBackup;
+    private Task<TreeItem<BackupFileEntry>> loadDomainFilesTask;
+    private List<BackupFile> currentDomainFiles = Collections.emptyList();
 
     @FXML
     SplitPane splitPane;
@@ -46,7 +49,37 @@ public class FilesTabController {
     Label selectedFilesCount;
 
     @FXML
+    Label selectedDomainSummary;
+
+    @FXML
+    TextField fileFilterField;
+
+    @FXML
+    ComboBox<String> sortComboBox;
+
+    @FXML
+    CheckBox filesOnlyFilterCheckBox;
+
+    @FXML
     public void initialize() {
+        setupDomainTree();
+        setupFilesTree();
+
+        sortComboBox.setItems(FXCollections.observableArrayList(
+                "Path (A-Z)",
+                "Path (Z-A)",
+                "Size (Largest first)",
+                "Size (Smallest first)",
+                "Type (Folders first)"
+        ));
+        sortComboBox.setValue("Path (A-Z)");
+
+        fileFilterField.textProperty().addListener((obs, oldValue, newValue) -> refreshCurrentDomainTree());
+        sortComboBox.valueProperty().addListener((obs, oldValue, newValue) -> refreshCurrentDomainTree());
+        filesOnlyFilterCheckBox.selectedProperty().addListener((obs, oldValue, newValue) -> refreshCurrentDomainTree());
+    }
+
+    private void setupDomainTree() {
         this.domainsTreeView.setCellFactory(view -> new TreeCell<>() {
             @Override
             protected void updateItem(BackupFileEntry item, boolean empty) {
@@ -57,7 +90,6 @@ public class FilesTabController {
                     setGraphic(null);
                 } else {
                     this.setPrefHeight(36);
-
 
                     CheckBox checkBox = new CheckBox();
                     checkBox.selectedProperty().bindBidirectional(item.checkBoxSelectedProperty());
@@ -71,14 +103,11 @@ public class FilesTabController {
                     icon.setFitHeight(32);
                     graphic.getChildren().add(icon);
 
-                    this.getChildren().add(new Label(String.valueOf(item.getSize())));
-
                     setGraphic(graphic);
                     setText(item.getDisplayName());
 
-                    getDisclosureNode().setTranslateY(8);
+                    if (getDisclosureNode() != null) getDisclosureNode().setTranslateY(8);
                 }
-
             }
         });
 
@@ -89,14 +118,15 @@ public class FilesTabController {
             domainsTreeView.setCursor(Cursor.WAIT);
             filesTreeView.setCursor(Cursor.WAIT);
 
-            BackupFile file = newValue.getValue().getFile().get();
+            BackupFile domainRoot = newValue.getValue().getFile().get();
             loadDomainFilesTask = new Task<>() {
                 @Override
                 protected TreeItem<BackupFileEntry> call() {
-                    TreeItem<BackupFileEntry> root = new TreeItem<>(new BackupFileEntry(file));
+                    TreeItem<BackupFileEntry> root = new TreeItem<>(new BackupFileEntry(domainRoot));
                     try {
-                        List<BackupFile> result = selectedBackup.queryDomainFiles(false, file.domain);
-                        insertAsTree(root, result.stream().map(BackupFileEntry::new).collect(Collectors.toList()));
+                        List<BackupFile> result = selectedBackup.queryDomainFiles(false, domainRoot.domain);
+                        currentDomainFiles = result;
+                        buildFilteredTree(root, result);
                     } catch (DatabaseConnectionException | BackupReadException e) {
                         logger.error("Falha ao carregar arquivos do domínio", e);
                     }
@@ -105,24 +135,30 @@ public class FilesTabController {
                 }
             };
 
-            loadDomainFilesTask.valueProperty().addListener((obs, old, root) -> {
+            loadDomainFilesTask.valueProperty().addListener((obs, oldRoot, root) -> {
                 filesTreeView.setRoot(root);
                 domainsTreeView.setCursor(Cursor.DEFAULT);
                 filesTreeView.setCursor(Cursor.DEFAULT);
+                updateFileSelectionCount();
+                updateCurrentDomainSummary();
             });
 
             new Thread(loadDomainFilesTask).start();
         });
+    }
 
+    private void setupFilesTree() {
         this.filesTreeView.setCellFactory(view -> new TreeCell<>() {
             {
                 itemProperty().addListener((observable, oldValue, newValue) -> {
-                    if (newValue == null || newValue.getFile().isEmpty()) return;
+                    if (newValue == null || newValue.getFile().isEmpty() || getTreeItem() == null || getTreeItem().getParent() == null) {
+                        setContextMenu(null);
+                        return;
+                    }
                     TreeItem<BackupFileEntry> parent = getTreeItem().getParent();
                     setContextMenu(FileActions.getContextMenu(
                             newValue.getFile().get(),
                             splitPane.getScene().getWindow(),
-                            // Children are automatically removed as well by the tree structure, so removedIDs can be ignored
                             removedIDs -> parent.getChildren().remove(getTreeItem()))
                     );
                 });
@@ -151,12 +187,9 @@ public class FilesTabController {
                     icon.setFitHeight(16);
                     graphic.getChildren().add(icon);
 
-                    this.getChildren().add(new Label(String.valueOf(item.getSize())));
-
                     setGraphic(graphic);
                     setText(item.getDisplayName());
                 }
-
             }
         });
     }
@@ -188,8 +221,9 @@ public class FilesTabController {
                 }
 
                 if (selection != BackupFileEntry.Selection.PARTIAL) {
-                    for (TreeItem<BackupFileEntry> child_ : treeItem.getChildren())
+                    for (TreeItem<BackupFileEntry> child_ : treeItem.getChildren()) {
                         child_.getValue().setSelection(selection);
+                    }
                 }
 
                 updateFileSelectionCount();
@@ -202,8 +236,7 @@ public class FilesTabController {
         parents.add(root);
         for (int currentLevel = 1; currentLevel <= maxLevel; currentLevel++) {
             List<TreeItem<BackupFileEntry>> children = levels.get(currentLevel);
-            if (children == null)
-                children = new ArrayList<>();  // will eventually fail but results in a nicer error message
+            if (children == null) children = new ArrayList<>();
 
             for (TreeItem<BackupFileEntry> child : children) {
                 BackupFileEntry childEntry = child.getValue();
@@ -231,12 +264,15 @@ public class FilesTabController {
     }
 
     public void tabShown(ITunesBackup backup) {
-        if (backup == this.selectedBackup) return;
+        if (backup == this.selectedBackup && this.domainsTreeView.getRoot() != null) return;
 
         this.selectedBackup = backup;
 
         if (this.loadDomainFilesTask != null) this.loadDomainFilesTask.cancel(true);
         this.filesTreeView.setRoot(null);
+        this.currentDomainFiles = Collections.emptyList();
+        this.fileFilterField.clear();
+        this.filesOnlyFilterCheckBox.setSelected(false);
 
         List<BackupFile> domains;
         try {
@@ -285,7 +321,12 @@ public class FilesTabController {
         root.getChildren().addAll(domainGroups);
 
         this.domainsTreeView.setRoot(root);
+        if (PreferencesController.getExpandDomainGroups()) {
+            domainGroups.forEach(group -> group.setExpanded(true));
+        }
         updateDomainSelectionCount();
+        updateFileSelectionCount();
+        updateCurrentDomainSummary();
     }
 
     private TreeItem<BackupFileEntry> findDomainTreeItem(TreeItem<BackupFileEntry> root, String domain) {
@@ -295,6 +336,93 @@ public class FilesTabController {
             }
         }
         return null;
+    }
+
+    private void refreshCurrentDomainTree() {
+        TreeItem<BackupFileEntry> currentRoot = filesTreeView.getRoot();
+        if (currentRoot == null || currentRoot.getValue() == null || currentRoot.getValue().getFile().isEmpty()) return;
+
+        TreeItem<BackupFileEntry> newRoot = new TreeItem<>(new BackupFileEntry(currentRoot.getValue().getFile().get()));
+        try {
+            buildFilteredTree(newRoot, currentDomainFiles);
+        } catch (BackupReadException e) {
+            logger.error("Falha ao aplicar filtro local de arquivos", e);
+        }
+
+        filesTreeView.setRoot(newRoot);
+        updateFileSelectionCount();
+        updateCurrentDomainSummary();
+    }
+
+    private void buildFilteredTree(TreeItem<BackupFileEntry> root, List<BackupFile> source) throws BackupReadException {
+        List<BackupFile> filtered = applyLocalFilter(source);
+        List<BackupFileEntry> entries = filtered.stream().map(BackupFileEntry::new).collect(Collectors.toList());
+        insertAsTree(root, entries);
+        sortTree(root, getTreeComparator());
+    }
+
+    private List<BackupFile> applyLocalFilter(List<BackupFile> source) {
+        if (source == null) return Collections.emptyList();
+
+        String query = fileFilterField.getText() == null ? "" : fileFilterField.getText().trim().toLowerCase(Locale.ROOT);
+        boolean filesOnly = filesOnlyFilterCheckBox.isSelected();
+        boolean hasQuery = !query.isEmpty();
+
+        if (!hasQuery && !filesOnly) {
+            return new ArrayList<>(source);
+        }
+
+        Map<String, BackupFile> byPath = source.stream().collect(Collectors.toMap(f -> f.relativePath, f -> f, (first, second) -> first));
+        LinkedHashSet<BackupFile> visible = new LinkedHashSet<>();
+
+        for (BackupFile file : source) {
+            if (filesOnly && file.getFileType() != BackupFile.FileType.FILE) continue;
+            if (hasQuery) {
+                String haystack = (file.relativePath + " " + file.getFileName()).toLowerCase(Locale.ROOT);
+                if (!haystack.contains(query)) continue;
+            }
+
+            visible.add(file);
+            String parentPath = file.getParentPath();
+            while (!parentPath.isEmpty()) {
+                BackupFile parent = byPath.get(parentPath);
+                if (parent == null) break;
+                visible.add(parent);
+                parentPath = parent.getParentPath();
+            }
+        }
+
+        return new ArrayList<>(visible);
+    }
+
+    private Comparator<TreeItem<BackupFileEntry>> getTreeComparator() {
+        String mode = sortComboBox.getValue();
+
+        Comparator<TreeItem<BackupFileEntry>> byPath = Comparator.comparing(item -> item.getValue().getRelativePath().toLowerCase(Locale.ROOT));
+        Comparator<TreeItem<BackupFileEntry>> bySize = Comparator.comparingLong(item -> item.getValue().getSize());
+        Comparator<TreeItem<BackupFileEntry>> byType = Comparator.<TreeItem<BackupFileEntry>>comparingInt(item -> {
+            BackupFile file = item.getValue().getFile().orElse(null);
+            if (file == null) return 0;
+            return switch (file.getFileType()) {
+                case DIRECTORY -> 0;
+                case FILE -> 1;
+                case SYMBOLIC_LINK -> 2;
+            };
+        }).thenComparing(byPath);
+
+        if ("Path (Z-A)".equals(mode)) return byPath.reversed();
+        if ("Size (Largest first)".equals(mode)) return bySize.reversed().thenComparing(byPath);
+        if ("Size (Smallest first)".equals(mode)) return bySize.thenComparing(byPath);
+        if ("Type (Folders first)".equals(mode)) return byType;
+        return byPath;
+    }
+
+    private void sortTree(TreeItem<BackupFileEntry> parent, Comparator<TreeItem<BackupFileEntry>> comparator) {
+        if (parent == null || parent.isLeaf()) return;
+        parent.getChildren().sort(comparator);
+        for (TreeItem<BackupFileEntry> child : parent.getChildren()) {
+            sortTree(child, comparator);
+        }
     }
 
     private void updateDomainSelectionCount() {
@@ -327,6 +455,21 @@ public class FilesTabController {
         selectedFilesCount.setText(count + " file" + (count != 1 ? "s" : "") + " selected");
     }
 
+    private void updateCurrentDomainSummary() {
+        if (selectedDomainSummary == null) return;
+
+        if (filesTreeView.getRoot() == null) {
+            selectedDomainSummary.setText("No domain selected");
+            return;
+        }
+
+        long files = currentDomainFiles.stream().filter(file -> file.getFileType() == BackupFile.FileType.FILE).count();
+        long folders = currentDomainFiles.stream().filter(file -> file.getFileType() == BackupFile.FileType.DIRECTORY).count();
+        long size = currentDomainFiles.stream().mapToLong(BackupFile::getSize).sum();
+
+        selectedDomainSummary.setText(currentDomainFiles.size() + " entries | " + files + " files | " + folders + " folders | " + FileSize.format(size));
+    }
+
     private Stream<TreeItem<BackupFileEntry>> flattenAllChildren(TreeItem<BackupFileEntry> parent) {
         if (parent.isLeaf()) return Stream.empty();
 
@@ -334,10 +477,34 @@ public class FilesTabController {
     }
 
     @FXML
+    public void expandAllFiles() {
+        if (filesTreeView.getRoot() == null) return;
+        flattenAllChildren(filesTreeView.getRoot()).forEach(item -> item.setExpanded(true));
+    }
+
+    @FXML
+    public void collapseAllFiles() {
+        if (filesTreeView.getRoot() == null) return;
+        flattenAllChildren(filesTreeView.getRoot()).forEach(item -> item.setExpanded(false));
+    }
+
+    @FXML
+    public void clearFileFilter() {
+        fileFilterField.clear();
+        filesOnlyFilterCheckBox.setSelected(false);
+        sortComboBox.setValue("Path (A-Z)");
+    }
+
+    @FXML
     public void exportSelectedFiles() {
+        if (filesTreeView.getRoot() == null) return;
+
         DirectoryChooser chooser = new DirectoryChooser();
+        File lastDirectory = PreferencesController.getLastExportDirectory();
+        if (lastDirectory != null) chooser.setInitialDirectory(lastDirectory);
         File destination = chooser.showDialog(splitPane.getScene().getWindow());
         if (destination == null) return;
+        PreferencesController.setLastExportDirectory(destination);
 
         List<BackupFile> selectedFiles = flattenAllChildren(filesTreeView.getRoot())
                 .map(TreeItem::getValue)
@@ -356,9 +523,14 @@ public class FilesTabController {
 
     @FXML
     public void exportSelectedDomains() {
+        if (domainsTreeView.getRoot() == null) return;
+
         DirectoryChooser chooser = new DirectoryChooser();
+        File lastDirectory = PreferencesController.getLastExportDirectory();
+        if (lastDirectory != null) chooser.setInitialDirectory(lastDirectory);
         File destination = chooser.showDialog(splitPane.getScene().getWindow());
         if (destination == null) return;
+        PreferencesController.setLastExportDirectory(destination);
 
         String[] selectedDomains = flattenAllChildren(domainsTreeView.getRoot())
                 .map(TreeItem::getValue)
@@ -369,12 +541,13 @@ public class FilesTabController {
                 .map(file -> file.domain)
                 .toArray(String[]::new);
 
-        List<BackupFile> selectedFiles = null;
+        List<BackupFile> selectedFiles;
         try {
             selectedFiles = selectedBackup.queryDomainFiles(true, selectedDomains);
         } catch (DatabaseConnectionException e) {
             logger.error("Falha ao consultar arquivos dos domínios", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
+            return;
         }
 
         Task<Void> extractTask = exportFiles(selectedFiles, destination);
@@ -388,9 +561,13 @@ public class FilesTabController {
         return new Task<>() {
             @Override
             protected Void call() throws Exception {
+                if (files == null) return null;
+
                 ButtonType skipButtonType = new ButtonType("Skip", ButtonBar.ButtonData.NEXT_FORWARD);
                 ButtonType skipAllExistingButtonType = new ButtonType("Skip all existing", ButtonBar.ButtonData.NEXT_FORWARD);
-                boolean skipExisting = false;
+                boolean skipExisting = PreferencesController.getSkipExistingFiles();
+                boolean withRelativePath = PreferencesController.getCreateDirectoryStructure();
+                boolean preserveTimestamps = PreferencesController.getPreserveTimestamps();
 
                 for (int i = 0; i < files.size(); i++) {
                     if (isCancelled()) break;
@@ -401,7 +578,7 @@ public class FilesTabController {
                         updateMessage("Exportando arquivo " + (i + 1) + " de " + files.size() + ": " + fileName);
 
                         if (Thread.interrupted()) break;
-                        file.extractToFolder(destination, true);
+                        file.extractToFolder(destination, withRelativePath, preserveTimestamps);
                         updateProgress(i + 1, files.size());
                     } catch (ClosedByInterruptException e) {
                         break;
@@ -438,5 +615,4 @@ public class FilesTabController {
         Platform.runLater(alertTask);
         return alertTask.get();
     }
-
 }

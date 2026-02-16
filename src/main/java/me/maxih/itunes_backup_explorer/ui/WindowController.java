@@ -9,13 +9,10 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
-import javafx.scene.control.MenuItem;
 import javafx.scene.control.*;
 import javafx.scene.input.*;
-import javafx.scene.input.KeyCode;
-import javafx.scene.input.KeyCodeCombination;
-import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.AnchorPane;
+import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
@@ -25,6 +22,7 @@ import me.maxih.itunes_backup_explorer.api.BackupReadException;
 import me.maxih.itunes_backup_explorer.api.ITunesBackup;
 import me.maxih.itunes_backup_explorer.api.NotUnlockedException;
 import me.maxih.itunes_backup_explorer.api.UnsupportedCryptoException;
+import me.maxih.itunes_backup_explorer.util.FileSize;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +33,6 @@ import java.io.IOException;
 import java.security.InvalidKeyException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.List;
 import java.util.*;
 
 public class WindowController {
@@ -50,6 +47,9 @@ public class WindowController {
 
     @FXML
     VBox backupSidebarBox;
+
+    @FXML
+    VBox welcomePane;
 
     @FXML
     TabPane tabPane;
@@ -80,24 +80,39 @@ public class WindowController {
     Label statusBackupSize;
     @FXML
     Label statusEncryption;
+    @FXML
+    Label statusBackupPath;
 
     @FXML
     public void initialize() {
         this.lockedTabPages = Arrays.asList(this.filesTabPage, this.fileSearchTabPage);
 
         this.tabPane.getSelectionModel().selectedItemProperty().addListener((observable, oldTab, newTab) -> {
+            if (newTab == null || this.selectedBackup == null) return;
+
             Node tabPage = newTab.getContent();
-            if (this.lockedTabPages.contains(tabPage) && !this.tryUnlock())
-                this.tabPane.getSelectionModel().select(oldTab);
-            else if (tabPage == this.filesTabPage) this.filesTabPageController.tabShown(this.selectedBackup);
-            else if (tabPage == this.fileSearchTabPage) this.fileSearchTabPageController.tabShown(this.selectedBackup);
-            else if (tabPage == this.appsTabPage) this.appsTabPageController.tabShown(this.selectedBackup);
+            if (this.lockedTabPages.contains(tabPage) && !this.tryUnlock()) {
+                if (oldTab != null) this.tabPane.getSelectionModel().select(oldTab);
+            } else if (tabPage == this.filesTabPage) {
+                this.filesTabPageController.tabShown(this.selectedBackup);
+            } else if (tabPage == this.fileSearchTabPage) {
+                this.fileSearchTabPageController.tabShown(this.selectedBackup);
+            } else if (tabPage == this.appsTabPage) {
+                this.appsTabPageController.tabShown(this.selectedBackup);
+            }
         });
 
         this.tabPane.setVisible(false);
+        this.tabPane.setManaged(false);
+        this.welcomePane.setVisible(true);
+        this.welcomePane.setManaged(true);
+        this.welcomePane.setMouseTransparent(false);
+
         this.loadBackups();
-        setupKeyboardShortcuts();
-        setupDragAndDrop();
+        this.setupKeyboardShortcuts();
+        this.setupDragAndDrop();
+
+        Platform.runLater(this::applyTheme);
     }
 
     private void setupKeyboardShortcuts() {
@@ -168,6 +183,10 @@ public class WindowController {
     }
 
     public void loadBackup(ITunesBackup backup) {
+        if (this.backups.stream().anyMatch(existing -> existing.directory.equals(backup.directory))) {
+            return;
+        }
+
         ToggleButton backupEntry = new ToggleButton(backup.manifest.deviceName + "\n" + BACKUP_DATE_FMT.format(
                 backup.getBackupInfo().map(info -> info.lastBackupDate).orElse(backup.manifest.date)));
         backupEntry.getStyleClass().add("sidebar-button");
@@ -175,7 +194,7 @@ public class WindowController {
         backupEntry.setMaxWidth(Integer.MAX_VALUE);
         backupEntry.setPrefHeight(60);
         backupEntry.setAlignment(Pos.BASELINE_LEFT);
-        backupEntry.setPadding(new Insets(0, 24, 0, 24));  // top right bottom left
+        backupEntry.setPadding(new Insets(0, 24, 0, 24));
         backupEntry.setId(backup.directory.getName());
 
         MenuItem openBackupDirectory = new MenuItem("Open backup directory");
@@ -192,11 +211,17 @@ public class WindowController {
             backup.cleanUp();
             if (this.selectedBackup == backup) {
                 this.selectedBackup = null;
-                this.tabPane.setVisible(false);
             }
             this.backups.remove(backup);
             this.backupSidebarBox.getChildren().remove(backupEntry);
             this.sidebarButtons.remove(backup);
+
+            if (this.backups.isEmpty()) {
+                showWelcome();
+            } else if (this.selectedBackup == null) {
+                selectBackup(this.backups.get(0));
+            }
+            updateStatusBar();
         });
 
         ContextMenu backupContextMenu = new ContextMenu(openBackupDirectory, closeBackup);
@@ -205,20 +230,52 @@ public class WindowController {
         this.backups.add(backup);
         this.backupSidebarBox.getChildren().add(backupEntry);
         this.sidebarButtons.put(backup, backupEntry);
+        this.backups.sort(Comparator.comparing((ITunesBackup b) -> b.manifest.date).reversed());
+        this.backupSidebarBox.getChildren().sort(Comparator.comparing(node -> {
+            ToggleButton button = (ToggleButton) node;
+            return this.backups.stream().filter(backup_ -> sidebarButtons.get(backup_) == button)
+                    .map(backup_ -> backup_.manifest.date).findFirst().orElse(new Date(0));
+        }, Comparator.reverseOrder()));
     }
 
     public void loadBackups() {
+        ITunesBackup previousSelected = this.selectedBackup;
+
         this.backupSidebarBox.getChildren().clear();
+        this.sidebarButtons.clear();
+        this.backups.forEach(ITunesBackup::cleanUp);
         this.backups.clear();
+
         for (String root : PreferencesController.getBackupRoots()) {
             ITunesBackup.getBackups(new File(root)).forEach(this::loadBackup);
         }
 
-        this.backups.stream().findFirst().ifPresent(this::selectBackup);
+        this.backups.sort(Comparator.comparing((ITunesBackup b) -> b.manifest.date).reversed());
+
+        if (this.backups.isEmpty()) {
+            this.selectedBackup = null;
+            showWelcome();
+            updateStatusBar();
+            return;
+        }
+
+        Optional<ITunesBackup> byPrevious = previousSelected == null ? Optional.empty() :
+                this.backups.stream().filter(backup -> backup.directory.equals(previousSelected.directory)).findFirst();
+
+        if (byPrevious.isPresent()) {
+            selectBackup(byPrevious.get());
+        } else if (PreferencesController.getAutoSelectNewestBackup()) {
+            selectBackup(this.backups.get(0));
+        } else {
+            this.selectedBackup = null;
+            showWelcome();
+            updateStatusBar();
+        }
     }
 
     @SuppressWarnings("BooleanMethodIsAlwaysInverted")
     public boolean tryUnlock() {
+        if (this.selectedBackup == null) return false;
         if (!this.selectedBackup.isLocked()) return true;
         if (this.selectedBackup.manifest.getKeyBag().isEmpty()) return false;
 
@@ -245,21 +302,57 @@ public class WindowController {
     }
 
     public void selectBackup(ITunesBackup backup) {
-        this.sidebarButtons.get(backup).setSelected(true);
+        ToggleButton selectedButton = this.sidebarButtons.get(backup);
+        if (selectedButton == null) return;
+        selectedButton.setSelected(true);
         if (backup == this.selectedBackup) return;
 
-        if (selectedBackup != null) sidebarButtons.get(selectedBackup).setSelected(false);
+        if (selectedBackup != null && sidebarButtons.get(selectedBackup) != null) {
+            sidebarButtons.get(selectedBackup).setSelected(false);
+        }
         this.selectedBackup = backup;
+
+        showTabs();
 
         this.infoTabPageController.updateInformation(backup.manifest, backup.getBackupInfo().orElse(null));
         this.updateStatusBar();
 
         Node selectedTabPage = this.tabPane.getSelectionModel().getSelectedItem().getContent();
-        if (this.lockedTabPages.contains(selectedTabPage) && !this.tryUnlock())
+        if (this.lockedTabPages.contains(selectedTabPage) && !this.tryUnlock()) {
             this.tabPane.getSelectionModel().select(0);
-        else if (selectedTabPage == this.filesTabPage) this.filesTabPageController.tabShown(backup);
-        else if (selectedTabPage == this.fileSearchTabPage) this.fileSearchTabPageController.tabShown(backup);
+        } else if (selectedTabPage == this.filesTabPage) {
+            this.filesTabPageController.tabShown(backup);
+        } else if (selectedTabPage == this.fileSearchTabPage) {
+            this.fileSearchTabPageController.tabShown(backup);
+        } else if (selectedTabPage == this.appsTabPage) {
+            this.appsTabPageController.tabShown(backup);
+        }
+    }
+
+    private void showWelcome() {
+        this.tabPane.setVisible(false);
+        this.tabPane.setManaged(false);
+        this.welcomePane.setVisible(true);
+        this.welcomePane.setManaged(true);
+        this.welcomePane.setMouseTransparent(false);
+    }
+
+    private void showTabs() {
         this.tabPane.setVisible(true);
+        this.tabPane.setManaged(true);
+        this.welcomePane.setVisible(false);
+        this.welcomePane.setManaged(false);
+        this.welcomePane.setMouseTransparent(true);
+    }
+
+    private void applyTheme() {
+        Scene scene = tabPane.getScene();
+        if (scene == null) return;
+
+        Parent root = scene.getRoot();
+        root.getStyleClass().removeAll("theme-dark", "theme-light");
+        String theme = "Light".equalsIgnoreCase(PreferencesController.getTheme()) ? "theme-light" : "theme-dark";
+        root.getStyleClass().add(theme);
     }
 
     @FXML
@@ -280,12 +373,13 @@ public class WindowController {
             Parent root = fxmlLoader.load();
             PreferencesController controller = fxmlLoader.getController();
             controller.reloadCallback = this::loadBackups;
+            controller.preferencesChangedCallback = this::applyTheme;
 
             Stage prefsWindow = new Stage();
             prefsWindow.initModality(Modality.APPLICATION_MODAL);
             prefsWindow.initOwner(tabPane.getScene().getWindow());
 
-            Scene prefsScene = new Scene(root, 650, 550);
+            Scene prefsScene = new Scene(root, 760, 620);
             prefsWindow.setScene(prefsScene);
             prefsWindow.setTitle("Preferences");
             prefsWindow.getIcons().add(ITunesBackupExplorer.APP_ICON);
@@ -315,6 +409,11 @@ public class WindowController {
     }
 
     @FXML
+    public void reloadBackupsAction() {
+        this.loadBackups();
+    }
+
+    @FXML
     public void quit() {
         this.cleanUp();
         Platform.exit();
@@ -324,11 +423,11 @@ public class WindowController {
     public void helpAbout() {
         Alert about = new Alert(Alert.AlertType.INFORMATION);
         about.setTitle("About iTunes Backup Explorer");
-        about.setHeaderText("iTunes Backup Explorer v2.0");
+        about.setHeaderText("iTunes Backup Explorer v2.1");
         about.setContentText(
-            "Desenvolvido originalmente por maxih\n\n" +
-            "Licença: MIT\n\n" +
-            "GitHub: https://github.com/MaxiHuHe04/iTunes-Backup-Explorer"
+                "Desenvolvido originalmente por maxih\n\n" +
+                        "Licença: MIT\n\n" +
+                        "GitHub: https://github.com/MaxiHuHe04/iTunes-Backup-Explorer"
         );
         ((Stage) about.getDialogPane().getScene().getWindow()).getIcons().add(ITunesBackupExplorer.APP_ICON);
         about.showAndWait();
@@ -339,19 +438,24 @@ public class WindowController {
             statusTotalFiles.setText("Total files: --");
             statusBackupSize.setText("Size: --");
             statusEncryption.setText("Encryption: --");
+            statusBackupPath.setText("Backup: --");
             return;
         }
 
         try {
-            int totalFiles = selectedBackup.queryAllFiles().size();
+            List<me.maxih.itunes_backup_explorer.api.BackupFile> files = selectedBackup.queryAllFiles();
+            int totalFiles = files.size();
+            long totalSize = files.stream().mapToLong(me.maxih.itunes_backup_explorer.api.BackupFile::getSize).sum();
             statusTotalFiles.setText("Total files: " + totalFiles);
+            statusBackupSize.setText("Size: " + FileSize.format(totalSize));
         } catch (Exception e) {
             statusTotalFiles.setText("Total files: --");
+            statusBackupSize.setText("Size: --");
         }
 
-        statusBackupSize.setText("Size: --");
-
-        String encryptionStatus = selectedBackup.manifest.encrypted ? "Encrypted" : "Not encrypted";
+        String encryptionStatus = selectedBackup.manifest.encrypted ?
+                (selectedBackup.isLocked() ? "Encrypted (locked)" : "Encrypted (unlocked)") : "Not encrypted";
         statusEncryption.setText("Encryption: " + encryptionStatus);
+        statusBackupPath.setText("Backup: " + selectedBackup.directory.getAbsolutePath());
     }
 }

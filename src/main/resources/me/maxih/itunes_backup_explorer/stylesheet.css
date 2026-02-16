@@ -487,3 +487,159 @@
 .combo-box:disabled {
     -fx-opacity: 0.5;
 }
+
+.welcome-pane {
+    -fx-background-color: linear-gradient(to bottom right, #202436, #181b29);
+    -fx-border-color: #31384f;
+    -fx-border-width: 0;
+    -fx-padding: 0;
+    -fx-background-insets: 0;
+}
+
+.welcome-title {
+    -fx-font-size: 24px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #f3f5ff;
+}
+
+.welcome-subtitle {
+    -fx-text-fill: #b9bfd8;
+    -fx-font-size: 13px;
+}
+
+.welcome-badge-row {
+    -fx-padding: 6 0 4 0;
+}
+
+.welcome-badge {
+    -fx-background-color: #2a3144;
+    -fx-border-color: #3a425f;
+    -fx-border-radius: 999px;
+    -fx-background-radius: 999px;
+    -fx-padding: 4 12 4 12;
+    -fx-text-fill: #cfd6f6;
+}
+
+.sidebar .drag-over {
+    -fx-border-color: #6c7ff2;
+    -fx-border-width: 2px;
+    -fx-border-style: segments(8, 4) line-cap round;
+}
+
+.theme-light {
+    -fx-base: #e8edf4;
+    -fx-background: #eef3f9;
+    -fx-control-inner-background: #f6f9fd;
+    -fx-control-inner-background-alt: #ecf1f8;
+    -fx-accent: #2f6ac7;
+    -fx-focus-color: #2f6ac7;
+    -fx-faint-focus-color: #2f6ac733;
+    -fx-text-base-color: #13233a;
+    -fx-text-fill: #13233a;
+}
+
+.theme-light .label,
+.theme-light .menu-bar .label,
+.theme-light .table-view .column-header .label,
+.theme-light .menu-item .label,
+.theme-light .list-cell,
+.theme-light .tree-cell,
+.theme-light .status-bar .label {
+    -fx-text-fill: #13233a;
+}
+
+.theme-light .text-field,
+.theme-light .combo-box,
+.theme-light .list-view,
+.theme-light .tree-view,
+.theme-light .table-view {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #c7d5e8;
+}
+
+.theme-light .button,
+.theme-light .toggle-button {
+    -fx-background-color: #dde7f5;
+    -fx-text-fill: #13233a;
+}
+
+.theme-light .button:hover,
+.theme-light .toggle-button:hover,
+.theme-light .quick-filter:hover {
+    -fx-background-color: #cfdcf1;
+}
+
+.theme-light .menu-bar,
+.theme-light .tab-pane .tab-header-area,
+.theme-light .status-bar,
+.theme-light .dialog-pane .header-panel,
+.theme-light .dialog-pane .button-bar {
+    -fx-background-color: #e6edf7;
+    -fx-border-color: #c7d5e8;
+}
+
+.theme-light .sidebar {
+    -fx-background-color: linear-gradient(to bottom, #e8eef8, #dfe7f3);
+    -fx-border-color: #c7d5e8;
+}
+
+.theme-light .sidebar-button {
+    -fx-border-color: #d2ddeb;
+    -fx-text-fill: #13233a;
+}
+
+.theme-light .sidebar-button:hover,
+.theme-light .tab:hover,
+.theme-light .tree-cell:hover,
+.theme-light .table-row-cell:hover,
+.theme-light .list-cell:hover {
+    -fx-background-color: #dde7f6;
+}
+
+.theme-light .sidebar-button:selected,
+.theme-light .tab:selected {
+    -fx-background-color: #d9e6fb;
+    -fx-border-color: transparent transparent transparent #2f6ac7;
+}
+
+.theme-light .tab:selected .tab-label,
+.theme-light .tab .tab-label,
+.theme-light .info-label {
+    -fx-text-fill: #355377;
+}
+
+.theme-light .quick-filter {
+    -fx-background-color: #e6eef9;
+    -fx-text-fill: #355377;
+    -fx-border-color: #c8d7ec;
+}
+
+.theme-light .check-box .box {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #adc3df;
+}
+
+.theme-light .check-box:selected .box {
+    -fx-background-color: #2f6ac7;
+    -fx-border-color: #2f6ac7;
+}
+
+.theme-light .welcome-pane {
+    -fx-background-color: linear-gradient(to bottom right, #f4f8fe, #e8eff8);
+    -fx-border-color: #c9d6e8;
+    -fx-border-width: 0;
+}
+
+.theme-light .welcome-title {
+    -fx-text-fill: #14335a;
+}
+
+.theme-light .welcome-subtitle {
+    -fx-text-fill: #33547f;
+}
+
+.theme-light .welcome-badge {
+    -fx-background-color: #e4edf9;
+    -fx-border-color: #c1d2e8;
+    -fx-text-fill: #2f4f75;
+}
