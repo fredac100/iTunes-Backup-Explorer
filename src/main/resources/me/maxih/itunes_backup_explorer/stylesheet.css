@@ -534,6 +534,71 @@
     -fx-border-style: segments(8, 4) line-cap round;
 }
 
+.device-no-device {
+    -fx-background-color: linear-gradient(to bottom right, #202436, #181b29);
+}
+
+.device-header-name {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #f3f5ff;
+}
+
+.device-header-model {
+    -fx-text-fill: #888899;
+    -fx-font-size: 14px;
+}
+
+.device-section {
+    -fx-padding: 0;
+}
+
+.device-battery-bar {
+    -fx-pref-width: 200px;
+}
+
+.device-battery-bar .bar {
+    -fx-background-color: linear-gradient(to right, #4CAF50, #66BB6A);
+    -fx-background-radius: 4px;
+    -fx-padding: 6px;
+}
+
+.device-battery-bar .track {
+    -fx-background-color: #2a2a3e;
+    -fx-background-radius: 4px;
+}
+
+.device-battery-bar-low .bar {
+    -fx-background-color: linear-gradient(to right, #f44336, #ef5350);
+    -fx-background-radius: 4px;
+    -fx-padding: 6px;
+}
+
+.device-storage-bar {
+    -fx-pref-height: 24px;
+}
+
+.device-storage-bar .bar {
+    -fx-background-color: linear-gradient(to right, #2196F3, #42A5F5);
+    -fx-background-radius: 4px;
+    -fx-padding: 8px;
+}
+
+.device-storage-bar .track {
+    -fx-background-color: #2a2a3e;
+    -fx-background-radius: 4px;
+}
+
+.device-warning {
+    -fx-text-fill: #f44336;
+    -fx-font-size: 12px;
+}
+
+.device-battery-percent {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+}
+
 .theme-light {
     -fx-base: #e8edf4;
     -fx-background: #eef3f9;
@@ -783,4 +848,25 @@
 
 .theme-light .media-preview-container {
     -fx-background-color: #e6edf7;
+}
+
+.theme-light .device-no-device {
+    -fx-background-color: linear-gradient(to bottom right, #f4f8fe, #e8eff8);
+}
+
+.theme-light .device-header-name {
+    -fx-text-fill: #14335a;
+}
+
+.theme-light .device-header-model {
+    -fx-text-fill: #355377;
+}
+
+.theme-light .device-battery-bar .track,
+.theme-light .device-storage-bar .track {
+    -fx-background-color: #dde7f5;
+}
+
+.theme-light .device-warning {
+    -fx-text-fill: #d32f2f;
 }

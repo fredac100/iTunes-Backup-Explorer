@@ -75,6 +75,11 @@ public class WindowController {
     AppsTabController appsTabPageController;
 
     @FXML
+    AnchorPane deviceTabPage;
+    @FXML
+    DeviceTabController deviceTabPageController;
+
+    @FXML
     Label statusTotalFiles;
     @FXML
     Label statusBackupSize;
@@ -88,9 +93,13 @@ public class WindowController {
         this.lockedTabPages = Arrays.asList(this.filesTabPage, this.mediaTabPage);
 
         this.tabPane.getSelectionModel().selectedItemProperty().addListener((observable, oldTab, newTab) -> {
-            if (newTab == null || this.selectedBackup == null) return;
+            if (newTab == null) return;
 
             Node tabPage = newTab.getContent();
+            if (tabPage == this.deviceTabPage) return;
+
+            if (this.selectedBackup == null) return;
+
             if (this.lockedTabPages.contains(tabPage) && !this.tryUnlock()) {
                 if (oldTab != null) this.tabPane.getSelectionModel().select(oldTab);
             } else if (tabPage == this.filesTabPage) {
@@ -179,6 +188,7 @@ public class WindowController {
     }
 
     public void cleanUp() {
+        this.deviceTabPageController.stopPolling();
         this.backups.forEach(ITunesBackup::cleanUp);
         ThumbnailService.getInstance().shutdown();
     }
