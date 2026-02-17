@@ -7,13 +7,13 @@ import org.slf4j.LoggerFactory;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 public class MirrorService {
@@ -40,6 +40,7 @@ public class MirrorService {
 
     private volatile State state = State.SETUP_REQUIRED;
     private volatile String errorMessage = "";
+    private volatile boolean airplayMode = false;
     private Consumer<State> stateListener;
     private int screenWidth;
     private int screenHeight;
@@ -272,7 +273,17 @@ public class MirrorService {
         }
     }
 
+    public void startAirPlay(Consumer<State> stateListenerArg, Consumer<byte[]> frameListener) {
+        this.airplayMode = true;
+        startStream(new String[]{"--airplay"}, stateListenerArg, frameListener);
+    }
+
     public void start(String udid, Consumer<State> stateListenerArg, Consumer<byte[]> frameListener) {
+        this.airplayMode = false;
+        startStream(new String[]{udid}, stateListenerArg, frameListener);
+    }
+
+    private void startStream(String[] scriptArgs, Consumer<State> stateListenerArg, Consumer<byte[]> frameListener) {
         this.stateListener = stateListenerArg;
 
         try {
@@ -283,42 +294,42 @@ public class MirrorService {
             }
             tempScript.toFile().deleteOnExit();
 
-            ProcessBuilder pb;
-            if (isVenvReady()) {
-                pb = new ProcessBuilder(VENV_PATH.resolve("bin/python3").toString(), "-u", tempScript.toString(), udid);
-            } else {
-                pb = new ProcessBuilder("python3", "-u", tempScript.toString(), udid);
-            }
+            java.util.List<String> cmd = new java.util.ArrayList<>();
+            cmd.add(isVenvReady() ? VENV_PATH.resolve("bin/python3").toString() : "python3");
+            cmd.add("-u");
+            cmd.add(tempScript.toString());
+            for (String arg : scriptArgs) cmd.add(arg);
+            ProcessBuilder pb = new ProcessBuilder(cmd);
 
             streamProcess = pb.start();
             setState(State.CONNECTING);
 
-            LinkedBlockingQueue<byte[]> frameQueue = new LinkedBlockingQueue<>(2);
-
+            AtomicReference<byte[]> latestFrame = new AtomicReference<>();
+            AtomicBoolean renderPending = new AtomicBoolean(false);
             AtomicBoolean receivedFrame = new AtomicBoolean(false);
 
             frameReaderThread = new Thread(() -> {
                 try (DataInputStream dis = new DataInputStream(streamProcess.getInputStream())) {
                     while (!Thread.currentThread().isInterrupted()) {
-                        int length = dis.readInt();
-                        if (length <= 0) continue;
+                        int totalLength = dis.readInt();
+                        if (totalLength <= 8) continue;
 
-                        byte[] frameData = new byte[length];
-                        dis.readFully(frameData);
+                        screenWidth = dis.readInt();
+                        screenHeight = dis.readInt();
 
-                        if (frameData.length >= 24) {
-                            screenWidth = ByteBuffer.wrap(frameData, 16, 4).getInt();
-                            screenHeight = ByteBuffer.wrap(frameData, 20, 4).getInt();
-                        }
+                        int imageLength = totalLength - 8;
+                        byte[] imageData = new byte[imageLength];
+                        dis.readFully(imageData);
 
-                        if (!frameQueue.offer(frameData)) {
-                            frameQueue.poll();
-                            frameQueue.offer(frameData);
-                        }
-
-                        byte[] toDispatch = frameQueue.poll();
-                        if (toDispatch != null) {
-                            Platform.runLater(() -> frameListener.accept(toDispatch));
+                        latestFrame.set(imageData);
+                        if (renderPending.compareAndSet(false, true)) {
+                            Platform.runLater(() -> {
+                                byte[] frame = latestFrame.getAndSet(null);
+                                renderPending.set(false);
+                                if (frame != null) {
+                                    frameListener.accept(frame);
+                                }
+                            });
                         }
 
                         if (receivedFrame.compareAndSet(false, true)) {
@@ -347,7 +358,7 @@ public class MirrorService {
                 try (BufferedReader reader = new BufferedReader(new InputStreamReader(streamProcess.getErrorStream()))) {
                     String line;
                     while ((line = reader.readLine()) != null && !Thread.currentThread().isInterrupted()) {
-                        logger.debug("mirror_stream: {}", line);
+                        logger.info("mirror_stream: {}", line);
                         if (line.startsWith("MIRROR_ERROR:")) {
                             errorMessage = line.substring("MIRROR_ERROR:".length()).trim();
                             setState(State.ERROR);
@@ -380,16 +391,18 @@ public class MirrorService {
                 return t;
             });
 
-            connectingTimeoutFuture = wdaProbeExecutor.schedule(() -> {
-                if (state == State.CONNECTING) {
-                    logger.warn("Timeout de {}s aguardando conexão", CONNECTING_TIMEOUT_SECONDS);
-                    errorMessage = "Tempo limite de conexão excedido. Verifique se o dispositivo está desbloqueado e com modo desenvolvedor ativado.";
-                    setState(State.ERROR);
-                    if (streamProcess != null && streamProcess.isAlive()) {
-                        streamProcess.destroyForcibly();
+            if (!airplayMode) {
+                connectingTimeoutFuture = wdaProbeExecutor.schedule(() -> {
+                    if (state == State.CONNECTING) {
+                        logger.warn("Timeout de {}s aguardando conexão", CONNECTING_TIMEOUT_SECONDS);
+                        errorMessage = "Tempo limite de conexão excedido. Verifique se o dispositivo está desbloqueado e com modo desenvolvedor ativado.";
+                        setState(State.ERROR);
+                        if (streamProcess != null && streamProcess.isAlive()) {
+                            streamProcess.destroyForcibly();
+                        }
                     }
-                }
-            }, CONNECTING_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                }, CONNECTING_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            }
             wdaProbeExecutor.scheduleAtFixedRate(() -> {
                 try {
                     HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:8100/status").openConnection();

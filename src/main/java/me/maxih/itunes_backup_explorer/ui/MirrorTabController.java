@@ -134,6 +134,19 @@ public class MirrorTabController {
     }
 
     @FXML
+    private void onAirPlayClicked() {
+        if (streaming) {
+            stopStreaming();
+        }
+        streaming = true;
+        showPane("view");
+        startStopButton.setText("Parar");
+        fpsWindowStart = System.currentTimeMillis();
+        frameCount = 0;
+        mirrorService.startAirPlay(this::applyState, this::updateFrame);
+    }
+
+    @FXML
     private void onRevealDeveloperMode() {
         if (currentUdid == null) return;
         developerModeHint.setText("Enviando comando ao iPhone...");
@@ -212,6 +225,9 @@ public class MirrorTabController {
             connectingSpinner.setVisible(false);
             screenView.setImage(null);
             fpsLabel.setText("");
+            if (!deviceConnected) {
+                showPane("noDevice");
+            }
         });
     }
 
@@ -280,9 +296,9 @@ public class MirrorTabController {
             deviceConnected = true;
             currentUdid = udid.get();
             Platform.runLater(() -> {
-                if (tabActive) {
+                if (tabActive && !streaming) {
                     checkAndStartStreaming();
-                } else {
+                } else if (!streaming) {
                     showPane("view");
                 }
             });

@@ -1,140 +1,245 @@
-# iTunes Backup Explorer
+<p align="center">
+  <img src="docs/assets/icon.png" alt="iDevice Toolkit Logo" width="120" />
+</p>
 
-iTunes Backup Explorer is a graphical open-source tool that can show, extract,
-and replace files in iPhone and iPad backups.
+<h1 align="center">iDevice Toolkit</h1>
 
-It supports both **encrypted** and non-encrypted backups, 
-currently from iOS 10.2 onwards.
+<p align="center">
+  <strong>A powerful, open-source desktop application for browsing, extracting, and managing iPhone & iPad backups — with full encrypted backup support, media gallery, device control, and live screen mirroring.</strong>
+</p>
 
-Most programs that support encrypted backups are either limited trials 
-or expensive. There are apparently only very few open-source projects 
-that target this issue and none that are also useful for the average user.
+<p align="center">
+  <a href="#features">Features</a> •
+  <a href="#screenshots">Screenshots</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#building-from-source">Build</a> •
+  <a href="#privacy">Privacy</a> •
+  <a href="#credits">Credits</a>
+</p>
 
-![Program screenshot](https://user-images.githubusercontent.com/12913518/164055723-2d234fa8-922f-439d-974c-f9e7e560a438.png)
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="Platforms" />
+  <img src="https://img.shields.io/badge/java-18%2B-orange" alt="Java 18+" />
+  <img src="https://img.shields.io/badge/javafx-23-green" alt="JavaFX 23" />
+  <img src="https://img.shields.io/badge/license-open--source-brightgreen" alt="License" />
+</p>
+
+---
+
+## Why iDevice Toolkit?
+
+Most tools that handle **encrypted iOS backups** are either paid, limited trials, or lack a proper GUI. iDevice Toolkit is a free, open-source alternative that goes far beyond simple backup browsing:
+
+- **Full encrypted backup support** — AES-256 decryption with Apple's KeyBag system, PBKDF2 key derivation, and protection class unwrapping
+- **Media gallery** — Visual grid with thumbnails for all your photos and videos
+- **Live device interaction** — Device info, screenshot capture, power controls, and real-time screen mirroring
+- **File modification** — Replace or delete files directly inside backups (with automatic safety backups)
+- **Zero network access** — Your data never leaves your machine
+
+---
+
+## Features
+
+### Backup Explorer
+
+| Feature | Description |
+|---------|-------------|
+| **Auto-discovery** | Automatically finds backups from default iTunes/Finder directories |
+| **Encrypted backups** | Full AES-256 CBC decryption using Apple's KeyBag and protection class model |
+| **Hierarchical browser** | Tree view organized by domain and path with context menu actions |
+| **File search** | SQLite LIKE syntax with wildcards (`%`, `_`), sortable results, and bulk export |
+| **File modification** | Replace files (re-encrypted automatically), delete entries, with incremental safety backups |
+| **Drag & drop** | Load backup folders by dropping them into the app |
+| **Multiple backups** | Open and switch between several backups simultaneously via sidebar |
+
+### Media Gallery
+
+| Feature | Description |
+|---------|-------------|
+| **Visual grid** | Thumbnail view of all photos and videos from Camera Roll and Media domains |
+| **Filters** | Toggle between All / Photos / Videos |
+| **Pagination** | Smooth browsing with 100 items per page and thumbnail caching |
+| **Preview panel** | Full preview with file metadata and details |
+| **Bulk export** | Export individual files or the entire gallery at once |
+| **Format support** | JPG, PNG, HEIC, HEIF, GIF, BMP, TIFF, MOV, MP4, M4V, AVI |
+
+### Device Integration
+
+| Feature | Description |
+|---------|-------------|
+| **Device info** | Live device details — model, iOS version, serial, battery, disk usage |
+| **Installed apps** | List of all user and system apps from connected devices |
+| **Screenshots** | Capture device screen directly from the app |
+| **Power controls** | Restart, shutdown, or sleep your device remotely |
+| **Screen mirroring** | Real-time MJPEG streaming with interactive touch support (tap & swipe) |
+| **iOS 17+ support** | Tunnel support via `pymobiledevice3` for modern iOS versions |
+
+### Security & Privacy
+
+- Decrypted database temp files are **securely zeroed out** and deleted on exit
+- All backup modifications create **incremental safety backups** before any change
+- **Path traversal protection** on file extraction
+- **No internet connection** — the app is fully offline by design
+
+---
+
+## Screenshots
+
+> Screenshots will be added here showcasing each major feature.
+
+### Backup Browser
+
+<!-- ![Backup Browser](docs/assets/screenshots/backup-browser.png) -->
+*Hierarchical file tree with domain-based organization and context menu actions.*
+
+### Media Gallery
+
+<!-- ![Media Gallery](docs/assets/screenshots/media-gallery.png) -->
+*Visual thumbnail grid with filters, pagination, and preview panel.*
+
+### File Search
+
+<!-- ![File Search](docs/assets/screenshots/file-search.png) -->
+*Powerful search with SQLite LIKE syntax, sortable columns, and bulk export.*
+
+### Device Info & Controls
+
+<!-- ![Device Tab](docs/assets/screenshots/device-tab.png) -->
+*Live device information with screenshot capture and power controls.*
+
+### Screen Mirroring
+
+<!-- ![Screen Mirroring](docs/assets/screenshots/screen-mirroring.png) -->
+*Real-time screen mirroring with interactive touch support.*
+
+### Dark & Light Themes
+
+<!-- ![Themes](docs/assets/screenshots/themes.png) -->
+*Full dark and light theme support.*
+
+---
 
 ## Installation
 
-<details>
-<summary>Jar file with dependencies (prior to v1.7)</summary>
-
-- Open your terminal and type in `java -version`.
-- If the command was not found or the version is below **18**,
-  download and install Java for your operating system, e.g. from [here](https://www.azul.com/downloads/?package=jdk-fx#zulu).
-- Download the jar file of the [latest release](https://github.com/MaxiHuHe04/iTunes-Backup-Explorer/releases/latest) of iTunes Backup Explorer.
-
-**Windows**
-- Simply double-click the downloaded file to start the program.
-- From the command line: `java -jar JARFILE.jar`.
-  Replace `JARFILE.jar` with the name of the file you downloaded.
-
-**macOS**
-- `cd` to the download directory and type in `chmod +x JARFILE.jar`.
-- Now, you should be able to simply double-click the file to start the program.
-- If that does not work, you may need to type `java -jar JARFILE.jar` into the terminal to run it.
-
-**If you have permission issues**
-
-When exporting data from the backup files, you might get `Operation not permitted`
-errors on your MacBook. To fix this, go to `System Settings > Privacy & Security > Full Disk Access` and add both the `java` binary file and the `jar` file you downloaded.
-
-More detailed information can be checked [here](https://stackoverflow.com/questions/65469536/why-does-a-jar-file-have-no-permissions-to-read-from-disk-when-started-via-doubl/66762230#66762230).
-
-**Linux**
-- `cd` to the download directory and type in `chmod +x JARFILE.jar`.
-- Depending on your specific system, you should be able to double-click the file to start the program.
-- If that does not work, use `java -jar JARFILE.jar` to run it.
-
-</details>
-
-Starting with version 1.7, the recommended way to install the program
-is using the installer for your operating system from the [latest release](https://github.com/MaxiHuHe04/iTunes-Backup-Explorer/releases/latest).
-
 ### Windows
-Download and run the `_win_x64.msi` installer.
-By default, it installs the program just for your user
-and doesn't require administrator privileges.
-Then, simply double-click the shortcut on your desktop
-or use Windows search to launch it.
+
+Download and run the `_win_x64.msi` installer from the [latest release](https://github.com/MaxiHuHe04/iTunes-Backup-Explorer/releases/latest).
+It installs for the current user and doesn't require administrator privileges.
 
 ### macOS
-Files ending with `_mac_arm64.dmg` can be used to install the program on Apple silicon processors (M1, M2, ...)
-while `_mac_x64.dmg` images support Intel-based Macs.
 
-You might have to go to `System Settings > Privacy & Security > Full Disk Access` and give the application 
-full disk access to prevent `Operation not permitted` errors when trying to export files.
+| Processor | File |
+|-----------|------|
+| Apple Silicon (M1, M2, ...) | `_mac_arm64.dmg` |
+| Intel | `_mac_x64.dmg` |
 
-### Debian/Ubuntu
-Download the `_debian_x64.deb` file and install it using `sudo apt install ./path/to/package.deb`.
-The application is installed to `/opt/itunes-backup-explorer` and added to the desktop menu as an *archiving utility*.
+> **Note:** You may need to grant Full Disk Access under `System Settings > Privacy & Security > Full Disk Access` to prevent `Operation not permitted` errors when exporting files.
 
-## File Search
-In the "File Search" tab, you can search for files using case-insensitive SQLite LIKE syntax.
-It supports two wildcards: `%` and `_`.
-- `%` matches any sequence of zero or more characters.
-- `_` matches any single character.
-- `\ ` is used as the escape character.
+### Debian / Ubuntu
 
-Here are a few examples:<br>
+```bash
+sudo apt install ./path/to/package_debian_x64.deb
+```
 
-|                                    | Domain           | Relative Path                     |
-|------------------------------------|------------------|-----------------------------------|
-| Videos in the camera roll          | CameraRollDomain | %.mov                             |
-| Files under the DCIM directory     | CameraRollDomain | Media/DCIM/%                      |
-| All .sqlite files                  | %                | %.sqlite                          |
-| .db databases in the home domain   | HomeDomain       | %.db                              |
-| All WhatsApp files                 | %whatsapp%       | %                                 |
-| App documents on iCloud            | HomeDomain       | Library/Mobile Documents/iCloud~% |
-| All files (can take a bit of time) | %                | %                                 |
+The application installs to `/opt/itunes-backup-explorer` and appears in the desktop menu.
 
-After you clicked on the `Search` button, you can also sort by clicking on a column name.
+### Optional Dependencies
 
-To find the largest files, type in a query, click on `Search` and then twice on `Size`.
+These are only needed for the **Device** and **Mirror** tabs:
 
-With the `Export matching` button on the bottom right, you can export all files that match your query to a directory you choose.
+| Dependency | Purpose |
+|------------|---------|
+| [libimobiledevice](https://libimobiledevice.org/) | Device info, app listing, screenshots, power controls |
+| [pymobiledevice3](https://github.com/doronz88/pymobiledevice3) | Screen mirroring and iOS 17+ tunnel support (auto-installed via in-app wizard) |
 
-By right-clicking on a file row, you can open, extract, replace or delete a single file.
-This works the same as in the hierarchical "Files" tab.
-If it is a symbolic link, you can show the target location.
+---
 
+## Building from Source
+
+**Requirements:** JDK 18+ and Apache Maven.
+
+### Native executable + installer
+
+```bash
+mvn clean package
+```
+
+The executable is generated in `target/app-image/` and the platform installer in `target/installer/`.
+
+### Fat JAR (cross-platform)
+
+```bash
+# Current platform
+mvn clean compile assembly:single
+
+# Multi-platform (Windows + Linux + ARM macOS)
+mvn clean compile assembly:single -Pmost_platforms
+```
+
+### Run directly (development)
+
+```bash
+mvn exec:exec
+```
+
+---
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| Language | Java 18 |
+| GUI Framework | JavaFX 23 (FXML MVC) |
+| Build System | Apache Maven |
+| Cryptography | Bouncy Castle 1.80 (AES-256, PBKDF2, AES-Wrap) |
+| Database | SQLite (Xerial sqlite-jdbc) |
+| Plist Parsing | dd-plist |
+| Screen Mirroring | pymobiledevice3 (Python) |
+| Device Communication | libimobiledevice CLI |
+
+---
+
+## File Search Syntax
+
+The search tab uses case-insensitive SQLite LIKE syntax with two wildcards:
+
+- `%` — matches any sequence of zero or more characters
+- `_` — matches any single character
+- `\` — escape character
+
+**Examples:**
+
+| Goal | Domain | Relative Path |
+|------|--------|---------------|
+| Camera roll videos | `CameraRollDomain` | `%.mov` |
+| Files under DCIM | `CameraRollDomain` | `Media/DCIM/%` |
+| All SQLite databases | `%` | `%.sqlite` |
+| WhatsApp files | `%whatsapp%` | `%` |
+| iCloud app documents | `HomeDomain` | `Library/Mobile Documents/iCloud~%` |
+| All files | `%` | `%` |
+
+---
 
 ## Privacy
 
-For me, this was a matter of course, but it was pointed out that I should clarify it anyway.
-I do not collect any personal data. In fact, the program does not even use an internet connection at this time.
-If that should change at some point in the future, I will update this notice.
+This application does **not** collect any data. It does not use an internet connection at any point. All processing happens entirely on your local machine.
 
-
-## How to build
-### Native executables
-1. Install a current JDK and Maven
-2. Run `mvn clean package`
-3. You can find the built executable in `target/app-image` and an installer in `target/installer`
-
-### Jar with dependencies
-To get a jar file with dependencies for your system, use `mvn clean compile assembly:single`.
-
-You can also build a fairly cross-platform jar file with dependencies for Windows, Linux and ARM macOS using the *most_platforms* profile: `mvn clean compile assembly:single -Pmost_platforms`
-
-
-## How to run directly using Maven
-Use `mvn exec:exec`
+---
 
 ## Credits
 
-I started looking into this after I saw 
-[this brilliant answer](https://stackoverflow.com/a/13793043/8868841) 
-on StackOverflow by [andrewdotn](https://stackoverflow.com/users/14558/andrewdotn) 
-to a question that has already been viewed more than 220.000 times. It 
-explains in detail how iOS backups are structured and how they are 
-encrypted, even providing a working code example.
+This project is a heavily extended fork of the original [iTunes Backup Explorer](https://github.com/MaxiHuHe04/iTunes-Backup-Explorer) by [MaxiHuHe04](https://github.com/MaxiHuHe04).
 
-So a huge thanks to him,
+The original work was inspired by [this StackOverflow answer](https://stackoverflow.com/a/13793043/8868841) by [andrewdotn](https://stackoverflow.com/users/14558/andrewdotn), which provides a detailed explanation of how iOS backups are structured and encrypted.
 
-his sources
-[iPhone Data Protection in Depth](https://conference.hitb.org/hitbsecconf2011ams/materials/D2T2),
-iOS Hacker's Handbook, 
-[a GitHub comment](https://github.com/horrorho/InflatableDonkey/issues/41#issuecomment-261927890),
-the [iphone-dataprotection](https://code.google.com/archive/p/iphone-dataprotection/) project
-and the Apple iOS Security Guide for iOS 11 (in the [Web Archive](http://web.archive.org/web/20180615172056/https://www.apple.com/business/docs/iOS_Security_Guide.pdf))
+**Key references:**
+- [iPhone Data Protection in Depth](https://conference.hitb.org/hitbsecconf2011ams/materials/D2T2) (HITB SecConf 2011)
+- [iphone-dataprotection](https://code.google.com/archive/p/iphone-dataprotection/) project
+- [Forensic Analysis of iTunes Backups](http://www.farleyforensics.com/2019/04/14/forensic-analysis-of-itunes-backups/) by Jack Farley
+- Apple iOS Security Guide
 
-and [Forensic Analysis of iTunes Backups](http://www.farleyforensics.com/2019/04/14/forensic-analysis-of-itunes-backups/) by Jack Farley
+---
+
+<p align="center">
+  Made with ☕ and Java
+</p>

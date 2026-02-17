@@ -19,6 +19,10 @@
         <VBox fx:id="noDevicePane" alignment="CENTER" spacing="12" styleClass="device-no-device" visible="false" managed="false">
             <Label text="Nenhum dispositivo conectado" styleClass="welcome-title"/>
             <Label text="Conecte um iPhone via USB para espelhar a tela" styleClass="welcome-subtitle" wrapText="true"/>
+            <Separator maxWidth="300"/>
+            <Label text="Ou espelhe via AirPlay (Wi-Fi):" styleClass="welcome-subtitle" wrapText="true"/>
+            <Button text="Iniciar AirPlay" onAction="#onAirPlayClicked"/>
+            <Label text="No iPhone: Central de Controle → Espelhamento de Tela → selecione 'Mirror'" styleClass="info-label" wrapText="true" textAlignment="CENTER" maxWidth="400" style="-fx-text-fill: #888;"/>
         </VBox>
 
         <VBox fx:id="developerModePane" alignment="CENTER" spacing="16" styleClass="device-no-device" visible="false" managed="false">
@@ -80,6 +84,7 @@
                 <Label fx:id="fpsLabel" styleClass="info-label"/>
                 <Region HBox.hgrow="ALWAYS"/>
                 <Label fx:id="wdaStatusLabel" styleClass="info-label"/>
+                <Button text="AirPlay" onAction="#onAirPlayClicked"/>
                 <Button fx:id="startStopButton" text="Parar" onAction="#onStartStopClicked"/>
             </HBox>
 
