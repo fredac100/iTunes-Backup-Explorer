@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/assets/icon.png" alt="iDevice Toolkit Logo" width="120" />
-</p>
-
 <h1 align="center">iDevice Toolkit</h1>
 
 <p align="center">
@@ -85,37 +81,38 @@ Most tools that handle **encrypted iOS backups** are either paid, limited trials
 
 ## Screenshots
 
-> Screenshots will be added here showcasing each major feature.
+### Backup Information
+
+![Backup Information](docs/Itunes1.png)
+*Backup details with device info, encryption status, and backup metadata.*
 
 ### Backup Browser
 
-<!-- ![Backup Browser](docs/assets/screenshots/backup-browser.png) -->
-*Hierarchical file tree with domain-based organization and context menu actions.*
+![Backup Browser](docs/Itunes2.png)
+*Hierarchical file tree with domain-based organization, filters, and bulk export.*
 
 ### Media Gallery
 
-<!-- ![Media Gallery](docs/assets/screenshots/media-gallery.png) -->
+![Media Gallery](docs/Itunes3.png)
 *Visual thumbnail grid with filters, pagination, and preview panel.*
 
-### File Search
+### Apps
 
-<!-- ![File Search](docs/assets/screenshots/file-search.png) -->
-*Powerful search with SQLite LIKE syntax, sortable columns, and bulk export.*
+![Apps](docs/Itunes4.png)
+*Installed apps list with file tree browser and export capabilities.*
 
 ### Device Info & Controls
 
-<!-- ![Device Tab](docs/assets/screenshots/device-tab.png) -->
-*Live device information with screenshot capture and power controls.*
+![Device Info](docs/Itunes6.png)
+*Live device information with battery, storage, screenshot capture, and power controls.*
+
+![Installed Apps](docs/Itunes7.png)
+*Installed apps list with search, filter by type, and uninstall support.*
 
 ### Screen Mirroring
 
-<!-- ![Screen Mirroring](docs/assets/screenshots/screen-mirroring.png) -->
-*Real-time screen mirroring with interactive touch support.*
-
-### Dark & Light Themes
-
-<!-- ![Themes](docs/assets/screenshots/themes.png) -->
-*Full dark and light theme support.*
+![Screen Mirroring](docs/Itunes5.png)
+*Real-time screen mirroring with interactive touch support via AirPlay.*
 
 ---
 
