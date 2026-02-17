@@ -870,3 +870,123 @@
 .theme-light .device-warning {
     -fx-text-fill: #d32f2f;
 }
+
+.mirror-toolbar {
+    -fx-background-color: #1a1a28;
+    -fx-border-color: transparent transparent #2a2a3e transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.mirror-screen-container {
+    -fx-background-color: #0a0a14;
+}
+
+.mirror-screen {
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 12, 0, 0, 2);
+}
+
+.mirror-state-badge {
+    -fx-background-color: #2a2a3e;
+    -fx-text-fill: #e0e0e8;
+    -fx-background-radius: 999px;
+    -fx-border-radius: 999px;
+    -fx-padding: 4 12 4 12;
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+}
+
+.mirror-state-connecting {
+    -fx-background-color: #5c4d1e;
+    -fx-text-fill: #ffd54f;
+}
+
+.mirror-state-view-only {
+    -fx-background-color: #1e3d1e;
+    -fx-text-fill: #66bb6a;
+}
+
+.mirror-state-interactive {
+    -fx-background-color: #1e2d5c;
+    -fx-text-fill: #64b5f6;
+}
+
+.mirror-state-error {
+    -fx-background-color: #5c1e1e;
+    -fx-text-fill: #ef5350;
+}
+
+.mirror-setup-log {
+    -fx-background-color: #1a1a28;
+    -fx-control-inner-background: #1a1a28;
+    -fx-text-fill: #b0b0c0;
+    -fx-font-family: "Monospace";
+    -fx-font-size: 11px;
+    -fx-border-color: #2a2a3e;
+    -fx-border-width: 1px;
+    -fx-border-radius: 4px;
+    -fx-background-radius: 4px;
+}
+
+.mirror-status-label {
+    -fx-text-fill: #888899;
+    -fx-font-size: 14px;
+    -fx-alignment: center;
+}
+
+.theme-light .mirror-toolbar {
+    -fx-background-color: #f5f8fc;
+    -fx-border-color: transparent transparent #c8d7ec transparent;
+}
+
+.theme-light .mirror-screen-container {
+    -fx-background-color: #d0d8e4;
+}
+
+.theme-light .mirror-state-badge {
+    -fx-background-color: #dde7f5;
+    -fx-text-fill: #13233a;
+}
+
+.theme-light .mirror-state-connecting {
+    -fx-background-color: #fff3cd;
+    -fx-text-fill: #856404;
+}
+
+.theme-light .mirror-state-view-only {
+    -fx-background-color: #d4edda;
+    -fx-text-fill: #155724;
+}
+
+.theme-light .mirror-state-interactive {
+    -fx-background-color: #cce5ff;
+    -fx-text-fill: #004085;
+}
+
+.theme-light .mirror-state-error {
+    -fx-background-color: #f8d7da;
+    -fx-text-fill: #721c24;
+}
+
+.theme-light .mirror-setup-log {
+    -fx-background-color: #f5f8fc;
+    -fx-control-inner-background: #f5f8fc;
+    -fx-text-fill: #355377;
+    -fx-border-color: #c8d7ec;
+}
+
+.theme-light .mirror-status-label {
+    -fx-text-fill: #355377;
+}
+
+.mirror-instructions-box {
+    -fx-background-color: #1a1a28;
+    -fx-background-radius: 8px;
+    -fx-border-color: #2a2a3e;
+    -fx-border-radius: 8px;
+    -fx-border-width: 1px;
+}
+
+.theme-light .mirror-instructions-box {
+    -fx-background-color: #f0f4fa;
+    -fx-border-color: #c8d7ec;
+}

@@ -69,4 +69,4 @@ echo Packaging...
     --linux-menu-group "Utility;Archiving;" \
     --linux-shortcut \
     --linux-app-category "utils" \
-    --linux-package-deps "ffmpeg, imagemagick, libheif1, libimobiledevice-utils, usbmuxd, ideviceinstaller"
+    --linux-package-deps "ffmpeg, imagemagick, libheif1, libimobiledevice-utils, usbmuxd, ideviceinstaller, python3, python3-venv, python3-pip"

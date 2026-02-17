@@ -54,6 +54,9 @@
                     <Tab text="Device">
                         <fx:include fx:id="deviceTabPage" source="device_tab.fxml"/>
                     </Tab>
+                    <Tab text="Mirror">
+                        <fx:include fx:id="mirrorTabPage" source="mirror_tab.fxml"/>
+                    </Tab>
                 </TabPane>
             </center>
             <bottom>

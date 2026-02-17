@@ -1,0 +1,498 @@
+package me.maxih.itunes_backup_explorer.util;
+
+import javafx.application.Platform;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+
+public class MirrorService {
+
+    public enum State {
+        SETUP_REQUIRED, DISCONNECTED, CONNECTING, VIEW_ONLY, INTERACTIVE, ERROR
+    }
+
+    public enum DeviceReadiness {
+        READY, DEVELOPER_MODE_DISABLED, NEEDS_TUNNEL, CHECK_FAILED
+    }
+
+    private static final Logger logger = LoggerFactory.getLogger(MirrorService.class);
+    private static final Path VENV_PATH = Path.of(System.getProperty("user.home"), ".config", "itunes-backup-explorer", "python-venv");
+
+    private static final int CONNECTING_TIMEOUT_SECONDS = 30;
+
+    private Process streamProcess;
+    private Thread frameReaderThread;
+    private Thread stderrReaderThread;
+    private ScheduledExecutorService wdaProbeExecutor;
+    private ScheduledFuture<?> connectingTimeoutFuture;
+    private ExecutorService httpExecutor = Executors.newCachedThreadPool();
+
+    private volatile State state = State.SETUP_REQUIRED;
+    private volatile String errorMessage = "";
+    private Consumer<State> stateListener;
+    private int screenWidth;
+    private int screenHeight;
+
+    public String getErrorMessage() {
+        return errorMessage;
+    }
+
+    public boolean isVenvReady() {
+        try {
+            Process p = new ProcessBuilder(
+                    VENV_PATH.resolve("bin/python3").toString(),
+                    "-c", "import pymobiledevice3"
+            ).redirectErrorStream(true).start();
+            p.getInputStream().readAllBytes();
+            boolean finished = p.waitFor(10, TimeUnit.SECONDS);
+            return finished && p.exitValue() == 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public DeviceReadiness checkDeviceReadiness(String udid) {
+        String script = String.join("\n",
+                "import logging",
+                "logging.disable(logging.CRITICAL)",
+                "from pymobiledevice3.lockdown import create_using_usbmux",
+                "l = create_using_usbmux(serial='" + udid + "')",
+                "if not l.developer_mode_status:",
+                "    print('DEVELOPER_MODE_DISABLED')",
+                "else:",
+                "    v = int(l.product_version.split('.')[0])",
+                "    if v >= 17:",
+                "        print('NEEDS_TUNNEL')",
+                "    else:",
+                "        print('READY')"
+        );
+
+        try {
+            Process p = new ProcessBuilder(
+                    VENV_PATH.resolve("bin/python3").toString(), "-c", script
+            ).redirectErrorStream(true).start();
+
+            String output = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+            boolean finished = p.waitFor(15, TimeUnit.SECONDS);
+
+            if (!finished) {
+                p.destroyForcibly();
+                return DeviceReadiness.CHECK_FAILED;
+            }
+
+            return switch (output) {
+                case "DEVELOPER_MODE_DISABLED" -> DeviceReadiness.DEVELOPER_MODE_DISABLED;
+                case "NEEDS_TUNNEL" -> DeviceReadiness.NEEDS_TUNNEL;
+                case "READY" -> DeviceReadiness.READY;
+                default -> {
+                    logger.warn("Resultado inesperado do check de readiness: {}", output);
+                    yield DeviceReadiness.CHECK_FAILED;
+                }
+            };
+        } catch (Exception e) {
+            logger.warn("Falha ao verificar readiness: {}", e.getMessage());
+            return DeviceReadiness.CHECK_FAILED;
+        }
+    }
+
+    public void revealDeveloperMode(String udid) {
+        try {
+            Process p = new ProcessBuilder(
+                    VENV_PATH.resolve("bin/pymobiledevice3").toString(),
+                    "amfi", "reveal-developer-mode", "--udid", udid
+            ).redirectErrorStream(true).start();
+            p.getInputStream().readAllBytes();
+            p.waitFor(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            logger.warn("Falha ao revelar developer mode: {}", e.getMessage());
+        }
+    }
+
+    private boolean isTunneldRunning() {
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:49151/hello").openConnection();
+            conn.setConnectTimeout(1500);
+            conn.setReadTimeout(1500);
+            conn.setRequestMethod("GET");
+            int code = conn.getResponseCode();
+            conn.disconnect();
+            return code == 200;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public boolean isTunnelAvailable() {
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:49151/").openConnection();
+            conn.setConnectTimeout(1500);
+            conn.setReadTimeout(1500);
+            conn.setRequestMethod("GET");
+            int code = conn.getResponseCode();
+            String body = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            conn.disconnect();
+            return code == 200 && !body.equals("{}");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean requestTunnelForDevice(String udid) {
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL(
+                    "http://127.0.0.1:49151/start-tunnel?udid=" + udid
+            ).openConnection();
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(60000);
+            conn.setRequestMethod("GET");
+            int code = conn.getResponseCode();
+            String body = new String(conn.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            conn.disconnect();
+            return code == 200 && !body.contains("error");
+        } catch (Exception e) {
+            logger.warn("Falha ao solicitar túnel para {}: {}", udid, e.getMessage());
+            return false;
+        }
+    }
+
+    public void ensureTunnelAndStart(String udid, Consumer<State> stateListenerArg, Consumer<byte[]> frameListener) {
+        this.stateListener = stateListenerArg;
+        setState(State.CONNECTING);
+
+        Thread thread = new Thread(() -> {
+            if (!isTunneldRunning()) {
+                logger.info("Tunneld não detectado, iniciando via pkexec...");
+                try {
+                    new ProcessBuilder(
+                            "pkexec",
+                            VENV_PATH.resolve("bin/pymobiledevice3").toString(),
+                            "remote", "tunneld", "--protocol", "tcp", "--daemonize"
+                    ).start();
+                } catch (IOException e) {
+                    logger.warn("Falha ao iniciar túnel: {}", e.getMessage());
+                    errorMessage = "Não foi possível iniciar o túnel. Execute manualmente:\nsudo "
+                            + VENV_PATH.resolve("bin/pymobiledevice3") + " remote tunneld --protocol tcp --daemonize";
+                    setState(State.ERROR);
+                    return;
+                }
+
+                for (int i = 0; i < 15; i++) {
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                    if (isTunneldRunning()) {
+                        break;
+                    }
+                }
+
+                if (!isTunneldRunning()) {
+                    errorMessage = "Tunneld não iniciou. Verifique se autenticou corretamente.\n"
+                            + "Execute manualmente: sudo " + VENV_PATH.resolve("bin/pymobiledevice3")
+                            + " remote tunneld --protocol tcp --daemonize";
+                    setState(State.ERROR);
+                    return;
+                }
+            }
+
+            logger.info("Tunneld rodando, solicitando túnel para {}...", udid);
+
+            if (!isTunnelAvailable()) {
+                requestTunnelForDevice(udid);
+
+                for (int i = 0; i < 30; i++) {
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                    if (isTunnelAvailable()) {
+                        break;
+                    }
+                }
+            }
+
+            if (!isTunnelAvailable()) {
+                errorMessage = "Túnel não foi criado para o dispositivo. Verifique se o iPhone está desbloqueado e confiou neste computador.";
+                setState(State.ERROR);
+                return;
+            }
+
+            logger.info("Túnel disponível, iniciando stream...");
+            Platform.runLater(() -> start(udid, stateListenerArg, frameListener));
+        });
+        thread.setName("mirror-tunnel-setup");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    public void setup(Consumer<String> progressLog, Runnable onDone, Consumer<String> onError) {
+        Thread setupThread = new Thread(() -> {
+            try {
+                runSetupStep(progressLog, "python3", "-m", "venv", VENV_PATH.toString());
+                runSetupStep(progressLog, VENV_PATH.resolve("bin/pip").toString(), "install", "--upgrade", "pip");
+                runSetupStep(progressLog, VENV_PATH.resolve("bin/pip").toString(), "install", "pymobiledevice3");
+                Platform.runLater(onDone);
+            } catch (Exception e) {
+                Platform.runLater(() -> onError.accept(e.getMessage()));
+            }
+        });
+        setupThread.setDaemon(true);
+        setupThread.start();
+    }
+
+    private void runSetupStep(Consumer<String> progressLog, String... command) throws IOException, InterruptedException {
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String finalLine = line;
+                Platform.runLater(() -> progressLog.accept(finalLine));
+            }
+        }
+
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new IOException("Comando falhou com código " + exitCode + ": " + command[0]);
+        }
+    }
+
+    public void start(String udid, Consumer<State> stateListenerArg, Consumer<byte[]> frameListener) {
+        this.stateListener = stateListenerArg;
+
+        try {
+            InputStream resourceStream = getClass().getResourceAsStream("/me/maxih/itunes_backup_explorer/mirror_stream.py");
+            Path tempScript = Files.createTempFile("mirror_stream_", ".py");
+            if (resourceStream != null) {
+                Files.copy(resourceStream, tempScript, StandardCopyOption.REPLACE_EXISTING);
+            }
+            tempScript.toFile().deleteOnExit();
+
+            ProcessBuilder pb;
+            if (isVenvReady()) {
+                pb = new ProcessBuilder(VENV_PATH.resolve("bin/python3").toString(), "-u", tempScript.toString(), udid);
+            } else {
+                pb = new ProcessBuilder("python3", "-u", tempScript.toString(), udid);
+            }
+
+            streamProcess = pb.start();
+            setState(State.CONNECTING);
+
+            LinkedBlockingQueue<byte[]> frameQueue = new LinkedBlockingQueue<>(2);
+
+            AtomicBoolean receivedFrame = new AtomicBoolean(false);
+
+            frameReaderThread = new Thread(() -> {
+                try (DataInputStream dis = new DataInputStream(streamProcess.getInputStream())) {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        int length = dis.readInt();
+                        if (length <= 0) continue;
+
+                        byte[] frameData = new byte[length];
+                        dis.readFully(frameData);
+
+                        if (frameData.length >= 24) {
+                            screenWidth = ByteBuffer.wrap(frameData, 16, 4).getInt();
+                            screenHeight = ByteBuffer.wrap(frameData, 20, 4).getInt();
+                        }
+
+                        if (!frameQueue.offer(frameData)) {
+                            frameQueue.poll();
+                            frameQueue.offer(frameData);
+                        }
+
+                        byte[] toDispatch = frameQueue.poll();
+                        if (toDispatch != null) {
+                            Platform.runLater(() -> frameListener.accept(toDispatch));
+                        }
+
+                        if (receivedFrame.compareAndSet(false, true)) {
+                            cancelConnectingTimeout();
+                            setState(State.VIEW_ONLY);
+                        }
+                    }
+                } catch (EOFException e) {
+                    logger.info("Stream de frames encerrado");
+                } catch (IOException e) {
+                    if (!Thread.currentThread().isInterrupted()) {
+                        logger.warn("Erro ao ler frames: {}", e.getMessage());
+                    }
+                } finally {
+                    if (!Thread.currentThread().isInterrupted() && state == State.CONNECTING) {
+                        errorMessage = "Processo encerrou sem enviar dados. Verifique a conexão com o dispositivo.";
+                        setState(State.ERROR);
+                    }
+                }
+            });
+            frameReaderThread.setName("mirror-frame-reader");
+            frameReaderThread.setDaemon(true);
+            frameReaderThread.start();
+
+            stderrReaderThread = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(streamProcess.getErrorStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null && !Thread.currentThread().isInterrupted()) {
+                        logger.debug("mirror_stream: {}", line);
+                        if (line.startsWith("MIRROR_ERROR:")) {
+                            errorMessage = line.substring("MIRROR_ERROR:".length()).trim();
+                            setState(State.ERROR);
+                        }
+                    }
+                } catch (IOException e) {
+                    if (!Thread.currentThread().isInterrupted()) {
+                        logger.warn("Erro ao ler stderr: {}", e.getMessage());
+                    }
+                }
+            });
+            stderrReaderThread.setName("mirror-stderr-reader");
+            stderrReaderThread.setDaemon(true);
+            stderrReaderThread.start();
+
+            streamProcess.onExit().thenAccept(p -> {
+                int exitCode = p.exitValue();
+                if (state == State.CONNECTING) {
+                    logger.warn("Processo Python encerrou com código {} durante conexão", exitCode);
+                    if (errorMessage.isEmpty()) {
+                        errorMessage = "Processo de captura encerrou inesperadamente (código " + exitCode + ")";
+                    }
+                    setState(State.ERROR);
+                }
+            });
+
+            wdaProbeExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "mirror-wda-probe");
+                t.setDaemon(true);
+                return t;
+            });
+
+            connectingTimeoutFuture = wdaProbeExecutor.schedule(() -> {
+                if (state == State.CONNECTING) {
+                    logger.warn("Timeout de {}s aguardando conexão", CONNECTING_TIMEOUT_SECONDS);
+                    errorMessage = "Tempo limite de conexão excedido. Verifique se o dispositivo está desbloqueado e com modo desenvolvedor ativado.";
+                    setState(State.ERROR);
+                    if (streamProcess != null && streamProcess.isAlive()) {
+                        streamProcess.destroyForcibly();
+                    }
+                }
+            }, CONNECTING_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            wdaProbeExecutor.scheduleAtFixedRate(() -> {
+                try {
+                    HttpURLConnection conn = (HttpURLConnection) new URL("http://localhost:8100/status").openConnection();
+                    conn.setConnectTimeout(2000);
+                    conn.setReadTimeout(2000);
+                    conn.setRequestMethod("GET");
+                    int responseCode = conn.getResponseCode();
+                    conn.disconnect();
+                    if (responseCode == 200) {
+                        setState(State.INTERACTIVE);
+                    }
+                } catch (Exception e) {
+                    if (state == State.INTERACTIVE) {
+                        setState(State.VIEW_ONLY);
+                    }
+                }
+            }, 5, 5, TimeUnit.SECONDS);
+
+        } catch (IOException e) {
+            logger.error("Falha ao iniciar processo de mirror: {}", e.getMessage());
+            errorMessage = e.getMessage();
+            setState(State.ERROR);
+        }
+    }
+
+    private void cancelConnectingTimeout() {
+        if (connectingTimeoutFuture != null && !connectingTimeoutFuture.isDone()) {
+            connectingTimeoutFuture.cancel(false);
+        }
+    }
+
+    public void stop() {
+        cancelConnectingTimeout();
+        if (streamProcess != null) {
+            streamProcess.destroyForcibly();
+        }
+        if (frameReaderThread != null) {
+            frameReaderThread.interrupt();
+        }
+        if (stderrReaderThread != null) {
+            stderrReaderThread.interrupt();
+        }
+        if (wdaProbeExecutor != null && !wdaProbeExecutor.isShutdown()) {
+            wdaProbeExecutor.shutdownNow();
+        }
+        setState(State.DISCONNECTED);
+    }
+
+    public void sendTap(double normX, double normY) {
+        if (state != State.INTERACTIVE) return;
+
+        double x = normX * screenWidth;
+        double y = normY * screenHeight;
+        String body = "{\"x\": " + x + ", \"y\": " + y + "}";
+
+        httpExecutor.submit(() -> sendWdaPost("http://localhost:8100/wda/tap", body));
+    }
+
+    public void sendSwipe(double fromX, double fromY, double toX, double toY, long durationMs) {
+        if (state != State.INTERACTIVE) return;
+
+        double fx = fromX * screenWidth;
+        double fy = fromY * screenHeight;
+        double tx = toX * screenWidth;
+        double ty = toY * screenHeight;
+        double durationSeconds = durationMs / 1000.0;
+
+        String body = "{\"fromX\": " + fx + ", \"fromY\": " + fy
+                + ", \"toX\": " + tx + ", \"toY\": " + ty
+                + ", \"duration\": " + durationSeconds + "}";
+
+        httpExecutor.submit(() -> sendWdaPost("http://localhost:8100/wda/dragfromtoforduration", body));
+    }
+
+    private void sendWdaPost(String urlString, String jsonBody) {
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL(urlString).openConnection();
+            conn.setConnectTimeout(2000);
+            conn.setReadTimeout(2000);
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setDoOutput(true);
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(jsonBody.getBytes());
+            }
+            conn.getInputStream().readAllBytes();
+            conn.disconnect();
+        } catch (Exception e) {
+            logger.warn("Falha ao enviar comando WDA para {}: {}", urlString, e.getMessage());
+        }
+    }
+
+    public void shutdown() {
+        stop();
+        if (httpExecutor != null && !httpExecutor.isShutdown()) {
+            httpExecutor.shutdownNow();
+        }
+    }
+
+    private void setState(State newState) {
+        this.state = newState;
+        if (stateListener != null) {
+            Platform.runLater(() -> stateListener.accept(newState));
+        }
+    }
+}

@@ -80,6 +80,11 @@ public class WindowController {
     DeviceTabController deviceTabPageController;
 
     @FXML
+    AnchorPane mirrorTabPage;
+    @FXML
+    MirrorTabController mirrorTabPageController;
+
+    @FXML
     Label statusTotalFiles;
     @FXML
     Label statusBackupSize;
@@ -96,7 +101,20 @@ public class WindowController {
             if (newTab == null) return;
 
             Node tabPage = newTab.getContent();
+
+            if (oldTab != null) {
+                Node oldTabPage = oldTab.getContent();
+                if (oldTabPage == this.mirrorTabPage) {
+                    this.mirrorTabPageController.tabDeselected();
+                }
+            }
+
             if (tabPage == this.deviceTabPage) return;
+
+            if (tabPage == this.mirrorTabPage) {
+                this.mirrorTabPageController.tabSelected();
+                return;
+            }
 
             if (this.selectedBackup == null) return;
 
@@ -189,6 +207,7 @@ public class WindowController {
 
     public void cleanUp() {
         this.deviceTabPageController.stopPolling();
+        this.mirrorTabPageController.stopAll();
         this.backups.forEach(ITunesBackup::cleanUp);
         ThumbnailService.getInstance().shutdown();
     }

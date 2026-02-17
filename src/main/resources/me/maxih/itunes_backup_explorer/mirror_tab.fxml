@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.*?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.*?>
+
+<AnchorPane xmlns="http://javafx.com/javafx/11.0.14-internal" xmlns:fx="http://javafx.com/fxml/1" fx:controller="me.maxih.itunes_backup_explorer.ui.MirrorTabController">
+    <StackPane AnchorPane.topAnchor="0.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0">
+
+        <VBox fx:id="setupPane" alignment="CENTER" spacing="16" styleClass="device-no-device" visible="true" managed="true">
+            <Label text="Configuração Necessária" styleClass="welcome-title"/>
+            <Label text="Para espelhar a tela do iPhone, é necessário instalar o pymobiledevice3." styleClass="welcome-subtitle" wrapText="true"/>
+            <Button fx:id="setupButton" text="Instalar Dependências" onAction="#onSetupClicked"/>
+            <TextArea fx:id="setupLog" prefHeight="200" prefWidth="500" editable="false" wrapText="true" visible="false" managed="false" styleClass="mirror-setup-log"/>
+        </VBox>
+
+        <VBox fx:id="noDevicePane" alignment="CENTER" spacing="12" styleClass="device-no-device" visible="false" managed="false">
+            <Label text="Nenhum dispositivo conectado" styleClass="welcome-title"/>
+            <Label text="Conecte um iPhone via USB para espelhar a tela" styleClass="welcome-subtitle" wrapText="true"/>
+        </VBox>
+
+        <VBox fx:id="developerModePane" alignment="CENTER" spacing="16" styleClass="device-no-device" visible="false" managed="false">
+            <padding>
+                <Insets top="40" bottom="40" left="60" right="60"/>
+            </padding>
+            <Label text="Modo Desenvolvedor Necessário" styleClass="welcome-title"/>
+            <Label fx:id="developerModeDescription" wrapText="true" textAlignment="CENTER" styleClass="welcome-subtitle" maxWidth="520"
+                   text="O espelhamento de tela requer que o Modo Desenvolvedor esteja ativado no iPhone. Siga os passos abaixo para ativá-lo:"/>
+            <VBox spacing="8" alignment="CENTER_LEFT" maxWidth="480" styleClass="mirror-instructions-box">
+                <padding>
+                    <Insets top="12" bottom="12" left="20" right="20"/>
+                </padding>
+                <Label text="1. No iPhone, abra Ajustes" styleClass="info-value"/>
+                <Label text="2. Vá em Privacidade e Segurança" styleClass="info-value"/>
+                <Label text="3. Role até o final e toque em Modo Desenvolvedor" styleClass="info-value"/>
+                <Label text="4. Ative o Modo Desenvolvedor" styleClass="info-value"/>
+                <Label text="5. O iPhone irá reiniciar" styleClass="info-value"/>
+                <Label text="6. Após reiniciar, confirme a ativação quando solicitado" styleClass="info-value"/>
+            </VBox>
+            <HBox spacing="10" alignment="CENTER">
+                <Button text="Revelar Opção no iPhone" onAction="#onRevealDeveloperMode"/>
+                <Button fx:id="retryButton" text="Tentar Novamente" onAction="#onRetryConnection"/>
+            </HBox>
+            <Label fx:id="developerModeHint" styleClass="info-label" wrapText="true" textAlignment="CENTER" maxWidth="480"
+                   text="Se a opção não aparecer, clique em 'Revelar Opção no iPhone' para torná-la visível nos Ajustes."/>
+        </VBox>
+
+        <VBox fx:id="tunnelPane" alignment="CENTER" spacing="16" styleClass="device-no-device" visible="false" managed="false">
+            <padding>
+                <Insets top="40" bottom="40" left="60" right="60"/>
+            </padding>
+            <Label text="Túnel Necessário (iOS 17+)" styleClass="welcome-title"/>
+            <Label wrapText="true" textAlignment="CENTER" styleClass="welcome-subtitle" maxWidth="520"
+                   text="A partir do iOS 17, a captura de tela requer um túnel de comunicação ativo. Você pode iniciá-lo de duas formas:"/>
+            <VBox spacing="8" alignment="CENTER_LEFT" maxWidth="520" styleClass="mirror-instructions-box">
+                <padding>
+                    <Insets top="12" bottom="12" left="20" right="20"/>
+                </padding>
+                <Label text="Opção 1: Clique no botão abaixo (solicita senha de administrador)" styleClass="info-value" wrapText="true"/>
+                <Label text="Opção 2: Execute no terminal:" styleClass="info-value"/>
+                <TextField fx:id="tunnelCommandField" editable="false" styleClass="mirror-setup-log"
+                           text="sudo pymobiledevice3 remote tunneld"/>
+            </VBox>
+            <HBox spacing="10" alignment="CENTER">
+                <Button fx:id="startTunnelButton" text="Iniciar Túnel" onAction="#onStartTunnel"/>
+                <Button fx:id="retryTunnelButton" text="Tentar Novamente" onAction="#onRetryConnection"/>
+            </HBox>
+            <Label fx:id="tunnelStatusLabel" styleClass="info-label" wrapText="true" textAlignment="CENTER" maxWidth="480"
+                   text="O túnel precisa ficar ativo durante o uso. Não feche o terminal se iniciar pelo Opção 2."/>
+        </VBox>
+
+        <VBox fx:id="viewPane" visible="false" managed="false" spacing="0">
+            <HBox styleClass="mirror-toolbar" alignment="CENTER_LEFT" spacing="10">
+                <padding>
+                    <Insets top="8" bottom="8" left="14" right="14"/>
+                </padding>
+                <Label fx:id="stateIndicator" text="Conectando" styleClass="mirror-state-badge"/>
+                <Label fx:id="fpsLabel" styleClass="info-label"/>
+                <Region HBox.hgrow="ALWAYS"/>
+                <Label fx:id="wdaStatusLabel" styleClass="info-label"/>
+                <Button fx:id="startStopButton" text="Parar" onAction="#onStartStopClicked"/>
+            </HBox>
+
+            <StackPane fx:id="screenContainer" VBox.vgrow="ALWAYS" styleClass="mirror-screen-container" style="-fx-background-color: #0a0a14;">
+                <ProgressIndicator fx:id="connectingSpinner" maxWidth="60" maxHeight="60" visible="true"/>
+                <ImageView fx:id="screenView" preserveRatio="true" visible="false" styleClass="mirror-screen"/>
+                <Label fx:id="statusLabel" styleClass="mirror-status-label" visible="false" managed="false" wrapText="true"/>
+            </StackPane>
+        </VBox>
+
+    </StackPane>
+</AnchorPane>
