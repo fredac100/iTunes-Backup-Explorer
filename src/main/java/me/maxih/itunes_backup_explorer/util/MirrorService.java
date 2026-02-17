@@ -286,6 +286,14 @@ public class MirrorService {
     private void startStream(String[] scriptArgs, Consumer<State> stateListenerArg, Consumer<byte[]> frameListener) {
         this.stateListener = stateListenerArg;
 
+        if (streamProcess != null && streamProcess.isAlive()) {
+            streamProcess.destroyForcibly();
+        }
+        killUxplay();
+        if (frameReaderThread != null) frameReaderThread.interrupt();
+        if (stderrReaderThread != null) stderrReaderThread.interrupt();
+        if (wdaProbeExecutor != null && !wdaProbeExecutor.isShutdown()) wdaProbeExecutor.shutdownNow();
+
         try {
             InputStream resourceStream = getClass().getResourceAsStream("/me/maxih/itunes_backup_explorer/mirror_stream.py");
             Path tempScript = Files.createTempFile("mirror_stream_", ".py");
@@ -309,7 +317,8 @@ public class MirrorService {
             AtomicBoolean receivedFrame = new AtomicBoolean(false);
 
             frameReaderThread = new Thread(() -> {
-                try (DataInputStream dis = new DataInputStream(streamProcess.getInputStream())) {
+                DataInputStream dis = new DataInputStream(streamProcess.getInputStream());
+                try {
                     while (!Thread.currentThread().isInterrupted()) {
                         int totalLength = dis.readInt();
                         if (totalLength <= 8) continue;
@@ -339,14 +348,13 @@ public class MirrorService {
                     }
                 } catch (EOFException e) {
                     logger.info("Stream de frames encerrado");
+                    if (!Thread.currentThread().isInterrupted() && (state == State.CONNECTING || state == State.VIEW_ONLY)) {
+                        errorMessage = "Conexão encerrada.";
+                        setState(State.ERROR);
+                    }
                 } catch (IOException e) {
                     if (!Thread.currentThread().isInterrupted()) {
                         logger.warn("Erro ao ler frames: {}", e.getMessage());
-                    }
-                } finally {
-                    if (!Thread.currentThread().isInterrupted() && state == State.CONNECTING) {
-                        errorMessage = "Processo encerrou sem enviar dados. Verifique a conexão com o dispositivo.";
-                        setState(State.ERROR);
                     }
                 }
             });
@@ -362,6 +370,10 @@ public class MirrorService {
                         if (line.startsWith("MIRROR_ERROR:")) {
                             errorMessage = line.substring("MIRROR_ERROR:".length()).trim();
                             setState(State.ERROR);
+                        } else if (line.equals("MIRROR_AIRPLAY_READY")) {
+                            if (state == State.ERROR) {
+                                setState(State.CONNECTING);
+                            }
                         }
                     }
                 } catch (IOException e) {
@@ -437,8 +449,16 @@ public class MirrorService {
     public void stop() {
         cancelConnectingTimeout();
         if (streamProcess != null) {
-            streamProcess.destroyForcibly();
+            streamProcess.destroy();
+            try {
+                if (!streamProcess.waitFor(3, TimeUnit.SECONDS)) {
+                    streamProcess.destroyForcibly();
+                }
+            } catch (InterruptedException ignored) {
+                streamProcess.destroyForcibly();
+            }
         }
+        killUxplay();
         if (frameReaderThread != null) {
             frameReaderThread.interrupt();
         }
@@ -449,6 +469,13 @@ public class MirrorService {
             wdaProbeExecutor.shutdownNow();
         }
         setState(State.DISCONNECTED);
+    }
+
+    private void killUxplay() {
+        try {
+            new ProcessBuilder("pkill", "-9", "-f", "uxplay").start().waitFor(5, TimeUnit.SECONDS);
+        } catch (Exception ignored) {
+        }
     }
 
     public void sendTap(double normX, double normY) {

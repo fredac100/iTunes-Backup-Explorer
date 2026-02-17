@@ -28,7 +28,26 @@ public class FileActions {
             File tempFile = Files.createTempFile(file.getFileName(), ext.length() > 0 ? ("." + ext) : ".txt").toFile();
             tempFile.deleteOnExit();
             file.extract(tempFile);
-            Desktop.getDesktop().open(tempFile);
+
+            Thread opener = new Thread(() -> {
+                try {
+                    String os = System.getProperty("os.name").toLowerCase();
+                    if (os.contains("linux")) {
+                        new ProcessBuilder("xdg-open", tempFile.getAbsolutePath()).start();
+                    } else if (os.contains("mac")) {
+                        new ProcessBuilder("open", tempFile.getAbsolutePath()).start();
+                    } else {
+                        Desktop.getDesktop().open(tempFile);
+                    }
+                } catch (IOException e) {
+                    logger.error("Falha ao abrir arquivo com aplicativo padrão", e);
+                    javafx.application.Platform.runLater(() ->
+                            Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage(), ButtonType.OK)
+                    );
+                }
+            });
+            opener.setDaemon(true);
+            opener.start();
         } catch (IOException | UnsupportedCryptoException | NotUnlockedException |
                  BackupReadException exception) {
             logger.error("Falha ao abrir arquivo", exception);

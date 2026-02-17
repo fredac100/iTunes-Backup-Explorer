@@ -41,6 +41,7 @@ public class MirrorTabController {
     @FXML private Label stateIndicator;
     @FXML private Label fpsLabel;
     @FXML private Label wdaStatusLabel;
+    @FXML private Button airPlayButton;
     @FXML private Button startStopButton;
     @FXML private StackPane screenContainer;
     @FXML private ProgressIndicator connectingSpinner;
@@ -135,10 +136,9 @@ public class MirrorTabController {
 
     @FXML
     private void onAirPlayClicked() {
-        if (streaming) {
-            stopStreaming();
-        }
+        if (streaming) return;
         streaming = true;
+        airPlayButton.setDisable(true);
         showPane("view");
         startStopButton.setText("Parar");
         fpsWindowStart = System.currentTimeMillis();
@@ -221,6 +221,7 @@ public class MirrorTabController {
         mirrorService.stop();
         streaming = false;
         Platform.runLater(() -> {
+            airPlayButton.setDisable(false);
             startStopButton.setText("Iniciar");
             connectingSpinner.setVisible(false);
             screenView.setImage(null);

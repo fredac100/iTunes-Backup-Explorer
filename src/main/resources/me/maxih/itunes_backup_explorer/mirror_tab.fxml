@@ -84,7 +84,7 @@
                 <Label fx:id="fpsLabel" styleClass="info-label"/>
                 <Region HBox.hgrow="ALWAYS"/>
                 <Label fx:id="wdaStatusLabel" styleClass="info-label"/>
-                <Button text="AirPlay" onAction="#onAirPlayClicked"/>
+                <Button fx:id="airPlayButton" text="AirPlay" onAction="#onAirPlayClicked"/>
                 <Button fx:id="startStopButton" text="Parar" onAction="#onStartStopClicked"/>
             </HBox>
 

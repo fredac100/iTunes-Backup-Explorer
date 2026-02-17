@@ -10,8 +10,29 @@ import logging
 import asyncio
 import threading
 import queue as _queue
+import signal
+import atexit
+import select
 
 logging.disable(logging.CRITICAL)
+
+_active_uxplay: subprocess.Popen | None = None
+
+
+def _cleanup_uxplay():
+    global _active_uxplay
+    proc = _active_uxplay
+    if proc is not None and proc.poll() is None:
+        proc.kill()
+        try:
+            proc.wait(timeout=3)
+        except Exception:
+            pass
+    _active_uxplay = None
+
+
+atexit.register(_cleanup_uxplay)
+signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
 try:
     from pymobiledevice3.lockdown import create_using_usbmux
@@ -128,49 +149,28 @@ def parse_jpeg_dimensions(data: bytes) -> tuple[int, int]:
     return 0, 0
 
 
-def stream_airplay() -> None:
-    print("INFO: Iniciando servidor AirPlay via uxplay...", file=sys.stderr, flush=True)
+def _kill_uxplay() -> None:
+    subprocess.run(["pkill", "-9", "-f", "uxplay"], capture_output=True)
+    time.sleep(1)
 
-    subprocess.run(["pkill", "-f", "uxplay"], capture_output=True)
-    time.sleep(0.5)
 
-    r_fd, w_fd = os.pipe()
-
+def _launch_uxplay(w_fd: int) -> subprocess.Popen:
+    global _active_uxplay
     vc = (f"videoconvert ! tee name=t ! queue ! jpegenc quality=70 ! "
           f"fdsink fd={w_fd} t. ! queue ! videoconvert")
+    proc = subprocess.Popen(
+        ["uxplay", "-nh", "-n", "Mirror", "-p", "7000", "-reset", "0",
+         "-vc", vc, "-vs", "fakesink", "-as", "0"],
+        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+        pass_fds=(w_fd,),
+    )
+    _active_uxplay = proc
+    return proc
 
-    try:
-        proc = subprocess.Popen(
-            ["uxplay", "-nh", "-n", "Mirror", "-vc", vc, "-vs", "fakesink", "-as", "0"],
-            stderr=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
-            pass_fds=(w_fd,),
-        )
-    except FileNotFoundError:
-        print("MIRROR_ERROR: uxplay não encontrado. Instale com: sudo apt install uxplay",
-              file=sys.stderr, flush=True)
-        os.close(r_fd)
-        os.close(w_fd)
-        sys.exit(1)
 
-    os.close(w_fd)
-
-    time.sleep(1)
-    if proc.poll() is not None:
-        err = ""
-        try:
-            err = proc.stderr.read().decode('utf-8', errors='replace').strip()
-        except Exception:
-            pass
-        if "DNS-SD" in err or "DNSService" in err:
-            print("MIRROR_ERROR: Serviço DNS-SD (Avahi) não está rodando. "
-                  "Execute: sudo systemctl start avahi-daemon",
-                  file=sys.stderr, flush=True)
-        else:
-            print(f"MIRROR_ERROR: uxplay falhou: {err}", file=sys.stderr, flush=True)
-        os.close(r_fd)
-        sys.exit(1)
-
+def _read_airplay_frames(proc: subprocess.Popen, r_fd: int,
+                         connect_timeout: float = 20.0) -> int:
     uxplay_error = []
 
     def monitor_stderr():
@@ -187,8 +187,6 @@ def stream_airplay() -> None:
     stderr_thread = threading.Thread(target=monitor_stderr, daemon=True)
     stderr_thread.start()
 
-    print("MIRROR_AIRPLAY_READY", file=sys.stderr, flush=True)
-
     frame_count = 0
     cached_w, cached_h = 0, 0
     buf = b''
@@ -196,6 +194,14 @@ def stream_airplay() -> None:
     try:
         while True:
             if proc.poll() is not None and not buf:
+                break
+
+            timeout = connect_timeout if frame_count == 0 else 5.0
+            ready, _, _ = select.select([r_fd], [], [], timeout)
+            if not ready:
+                if frame_count == 0:
+                    print(f"INFO: Timeout de {connect_timeout}s aguardando conexão AirPlay",
+                          file=sys.stderr, flush=True)
                 break
 
             try:
@@ -227,22 +233,90 @@ def stream_airplay() -> None:
 
                 write_frame(frame, cached_w, cached_h)
                 frame_count += 1
-
-        if frame_count == 0:
-            err_detail = "; ".join(uxplay_error) if uxplay_error else "nenhum frame recebido"
-            print(f"MIRROR_ERROR: AirPlay encerrou sem enviar vídeo ({err_detail})",
-                  file=sys.stderr, flush=True)
     except (BrokenPipeError, KeyboardInterrupt):
         pass
-    finally:
-        os.close(r_fd)
-        if proc.poll() is None:
-            proc.terminate()
+
+    if frame_count == 0 and uxplay_error:
+        print(f"INFO: uxplay reportou erros: {'; '.join(uxplay_error)}", file=sys.stderr, flush=True)
+
+    return frame_count
+
+
+def stream_airplay() -> None:
+    MAX_RETRIES = 5
+    RETRY_DELAY = 2
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        print(f"INFO: Iniciando servidor AirPlay via uxplay (tentativa {attempt}/{MAX_RETRIES})...",
+              file=sys.stderr, flush=True)
+
+        _kill_uxplay()
+
+        r_fd, w_fd = os.pipe()
+
+        try:
+            proc = _launch_uxplay(w_fd)
+        except FileNotFoundError:
+            print("MIRROR_ERROR: uxplay não encontrado. Instale com: sudo apt install uxplay",
+                  file=sys.stderr, flush=True)
+            os.close(r_fd)
+            os.close(w_fd)
+            sys.exit(1)
+
+        os.close(w_fd)
+
+        time.sleep(2.5)
+        if proc.poll() is not None:
+            err = ""
             try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-        sys.exit(0 if frame_count > 0 else 1)
+                err = proc.stderr.read().decode('utf-8', errors='replace').strip()
+            except Exception:
+                pass
+            os.close(r_fd)
+
+            if "DNS-SD" in err or "DNSService" in err:
+                print("MIRROR_ERROR: Serviço DNS-SD (Avahi) não está rodando. "
+                      "Execute: sudo systemctl start avahi-daemon",
+                      file=sys.stderr, flush=True)
+                sys.exit(1)
+
+            if attempt < MAX_RETRIES:
+                print(f"INFO: uxplay encerrou prematuramente, tentando novamente em {RETRY_DELAY}s...",
+                      file=sys.stderr, flush=True)
+                time.sleep(RETRY_DELAY)
+                continue
+
+            print(f"MIRROR_ERROR: uxplay falhou após {MAX_RETRIES} tentativas: {err}",
+                  file=sys.stderr, flush=True)
+            sys.exit(1)
+
+        print("MIRROR_AIRPLAY_READY", file=sys.stderr, flush=True)
+
+        try:
+            frame_count = _read_airplay_frames(proc, r_fd)
+        except Exception as e:
+            print(f"INFO: Exceção em _read_airplay_frames: {e}", file=sys.stderr, flush=True)
+            frame_count = 0
+
+        try:
+            os.close(r_fd)
+        except OSError:
+            pass
+        _cleanup_uxplay()
+
+        if frame_count > 0:
+            sys.exit(0)
+
+        if attempt < MAX_RETRIES:
+            print(f"INFO: Nenhum frame recebido, reiniciando uxplay em {RETRY_DELAY}s...",
+                  file=sys.stderr, flush=True)
+            time.sleep(RETRY_DELAY)
+            continue
+
+    print("MIRROR_ERROR: AirPlay encerrou sem enviar vídeo após múltiplas tentativas. "
+          "Verifique se o iPhone está na mesma rede e tente novamente.",
+          file=sys.stderr, flush=True)
+    sys.exit(1)
 
 
 def _start_capture_worker(fq, capture_fn, label="primary"):

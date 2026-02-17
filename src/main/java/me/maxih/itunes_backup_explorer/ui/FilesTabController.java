@@ -68,9 +68,6 @@ public class FilesTabController {
     Button collapseAllButton;
 
     @FXML
-    Button resetButton;
-
-    @FXML
     Button selectAllFilesButton;
 
     @FXML
@@ -524,7 +521,6 @@ public class FilesTabController {
         filesOnlyFilterCheckBox.setDisable(!enabled);
         expandAllButton.setDisable(!enabled);
         collapseAllButton.setDisable(!enabled);
-        resetButton.setDisable(!enabled);
         selectAllFilesButton.setDisable(!enabled);
     }
 
@@ -538,13 +534,6 @@ public class FilesTabController {
     public void collapseAllFiles() {
         if (filesTreeView.getRoot() == null) return;
         flattenAllChildren(filesTreeView.getRoot()).forEach(item -> item.setExpanded(false));
-    }
-
-    @FXML
-    public void clearFileFilter() {
-        fileFilterField.clear();
-        filesOnlyFilterCheckBox.setSelected(false);
-        sortComboBox.setValue("Path (A-Z)");
     }
 
     @FXML
