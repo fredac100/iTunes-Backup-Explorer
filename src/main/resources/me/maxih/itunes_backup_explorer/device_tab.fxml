@@ -87,7 +87,7 @@
                         </VBox.margin>
                     </Label>
                     <HBox spacing="10" alignment="CENTER_LEFT">
-                        <ProgressBar fx:id="batteryBar" prefWidth="200" styleClass="device-battery-bar"/>
+                        <ProgressBar fx:id="batteryBar" progress="0" prefWidth="200" styleClass="device-battery-bar"/>
                         <Label fx:id="batteryPercentLabel" styleClass="device-battery-percent"/>
                         <Label fx:id="batteryStatusLabel" styleClass="info-label"/>
                     </HBox>
@@ -99,7 +99,7 @@
                             <Insets bottom="5.0"/>
                         </VBox.margin>
                     </Label>
-                    <ProgressBar fx:id="storageBar" prefHeight="20" maxWidth="Infinity" styleClass="device-storage-bar"/>
+                    <ProgressBar fx:id="storageBar" progress="0" prefHeight="20" maxWidth="Infinity" styleClass="device-storage-bar"/>
                     <Label fx:id="storageInfoLabel" styleClass="info-label"/>
                 </VBox>
 

@@ -235,8 +235,8 @@ public class DeviceTabController {
             }
 
             if (info.totalDiskCapacity() > 0) {
-                long used = info.totalDataCapacity() - info.totalDataAvailable();
-                double ratio = (double) used / info.totalDataCapacity();
+                long used = info.totalDiskCapacity() - info.totalDataAvailable();
+                double ratio = (double) used / info.totalDiskCapacity();
                 storageBar.setProgress(ratio);
                 storageInfoLabel.setText(FileSize.format(used) + " usados de " + FileSize.format(info.totalDiskCapacity()));
             } else {

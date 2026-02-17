@@ -67,7 +67,7 @@ public class DeviceService {
         if (diskDict != null) {
             totalDiskCapacity = getLong(diskDict, "TotalDiskCapacity", -1);
             totalDataCapacity = getLong(diskDict, "TotalDataCapacity", -1);
-            totalDataAvailable = getLong(diskDict, "TotalDataAvailable", -1);
+            totalDataAvailable = getLong(diskDict, "AmountDataAvailable", -1);
         }
 
         DeviceInfo info = new DeviceInfo(
