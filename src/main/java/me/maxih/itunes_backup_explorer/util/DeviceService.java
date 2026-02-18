@@ -673,15 +673,25 @@ public class DeviceService {
             pb.redirectErrorStream(true);
             Process process = pb.start();
 
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
+            try (InputStreamReader isr = new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
+                StringBuilder sb = new StringBuilder();
+                int ch;
+                while ((ch = isr.read()) != -1) {
                     if (isCancelled.get()) {
                         process.destroyForcibly();
                         return BackupResult.CANCELLED;
                     }
-                    onProgressLine.accept(line);
+                    if (ch == '\r' || ch == '\n') {
+                        if (!sb.isEmpty()) {
+                            onProgressLine.accept(sb.toString());
+                            sb.setLength(0);
+                        }
+                    } else {
+                        sb.append((char) ch);
+                    }
+                }
+                if (!sb.isEmpty()) {
+                    onProgressLine.accept(sb.toString());
                 }
             }
 
