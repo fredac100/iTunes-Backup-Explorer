@@ -223,7 +223,9 @@ public class WindowController {
     }
 
     public void loadBackup(ITunesBackup backup) {
-        if (this.backups.stream().anyMatch(existing -> existing.directory.equals(backup.directory))) {
+        String normalizedPath = backup.directory.toPath().toAbsolutePath().normalize().toString();
+        if (this.backups.stream().anyMatch(existing ->
+                existing.directory.toPath().toAbsolutePath().normalize().toString().equals(normalizedPath))) {
             return;
         }
 
@@ -268,14 +270,14 @@ public class WindowController {
         backupEntry.setContextMenu(backupContextMenu);
 
         this.backups.add(backup);
-        this.backupSidebarBox.getChildren().add(backupEntry);
         this.sidebarButtons.put(backup, backupEntry);
         this.backups.sort(Comparator.comparing((ITunesBackup b) -> b.manifest.date).reversed());
-        this.backupSidebarBox.getChildren().sort(Comparator.comparing(node -> {
-            ToggleButton button = (ToggleButton) node;
-            return this.backups.stream().filter(backup_ -> sidebarButtons.get(backup_) == button)
-                    .map(backup_ -> backup_.manifest.date).findFirst().orElse(new Date(0));
-        }, Comparator.reverseOrder()));
+
+        List<Node> sorted = this.backups.stream()
+                .map(b -> (Node) this.sidebarButtons.get(b))
+                .filter(Objects::nonNull)
+                .toList();
+        this.backupSidebarBox.getChildren().setAll(sorted);
     }
 
     public void loadBackups() {

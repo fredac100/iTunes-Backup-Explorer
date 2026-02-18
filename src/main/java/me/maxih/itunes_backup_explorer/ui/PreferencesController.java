@@ -48,9 +48,13 @@ public class PreferencesController {
     }
 
     public static boolean addBackupRoot(String path) {
+        String normalizedPath = Paths.get(path).toAbsolutePath().normalize().toString();
         String[] existing = getBackupRoots();
         for (String root : existing) {
-            if (root.trim().equals(path)) return false;
+            String normalizedRoot = Paths.get(root.trim()).toAbsolutePath().normalize().toString();
+            if (normalizedRoot.equals(normalizedPath)) return false;
+            if (normalizedPath.startsWith(normalizedRoot + File.separator)) return false;
+            if (normalizedRoot.startsWith(normalizedPath + File.separator)) return false;
         }
         String roots = PREFERENCES.get(KEY_BACKUP_ROOTS, DEFAULT_ROOTS);
         String updated = roots.isEmpty() ? path : roots + "\n" + path;
