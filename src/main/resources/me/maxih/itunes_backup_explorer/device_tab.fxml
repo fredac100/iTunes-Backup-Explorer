@@ -8,9 +8,9 @@
 <AnchorPane xmlns="http://javafx.com/javafx/11.0.14-internal" xmlns:fx="http://javafx.com/fxml/1" fx:controller="me.maxih.itunes_backup_explorer.ui.DeviceTabController">
     <StackPane AnchorPane.topAnchor="0.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0">
         <VBox fx:id="noDevicePane" alignment="CENTER" spacing="12" styleClass="device-no-device">
-            <Label text="Nenhum dispositivo conectado" styleClass="welcome-title"/>
-            <Label text="Conecte um iPhone via USB e confie neste computador" styleClass="welcome-subtitle" wrapText="true"/>
-            <Label fx:id="libimobiledeviceWarning" text="libimobiledevice não encontrado. Instale com: sudo apt install libimobiledevice-utils usbmuxd"
+            <Label text="No device connected" styleClass="welcome-title"/>
+            <Label text="Connect an iPhone via USB and trust this computer" styleClass="welcome-subtitle" wrapText="true"/>
+            <Label fx:id="libimobiledeviceWarning" text="libimobiledevice not found. See https://github.com/libimobiledevice/libimobiledevice for installation instructions."
                    styleClass="device-warning" visible="false" managed="false" wrapText="true"/>
         </VBox>
 
@@ -26,19 +26,19 @@
                     <Label fx:id="deviceNameLabel" styleClass="device-header-name"/>
                     <Label fx:id="deviceModelLabel" styleClass="device-header-model"/>
                     <Region HBox.hgrow="ALWAYS"/>
-                    <Button text="Atualizar" onAction="#refreshDevice"/>
+                    <Button text="Refresh" onAction="#refreshDevice"/>
                     <Button text="Screenshot" onAction="#takeScreenshot"/>
-                    <MenuButton text="Ações">
+                    <MenuButton text="Actions">
                         <items>
-                            <MenuItem text="Reiniciar" onAction="#restartDevice"/>
-                            <MenuItem text="Desligar" onAction="#shutdownDevice"/>
-                            <MenuItem text="Suspender" onAction="#sleepDevice"/>
+                            <MenuItem text="Restart" onAction="#restartDevice"/>
+                            <MenuItem text="Shutdown" onAction="#shutdownDevice"/>
+                            <MenuItem text="Sleep" onAction="#sleepDevice"/>
                         </items>
                     </MenuButton>
                 </HBox>
 
                 <VBox spacing="10">
-                    <Label text="Informações do Dispositivo" styleClass="section-title">
+                    <Label text="Device Information" styleClass="section-title">
                         <VBox.margin>
                             <Insets bottom="5.0"/>
                         </VBox.margin>
@@ -49,10 +49,10 @@
                             <ColumnConstraints hgrow="ALWAYS" minWidth="300"/>
                         </columnConstraints>
 
-                        <Label text="Nome" styleClass="info-label" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
+                        <Label text="Name" styleClass="info-label" GridPane.columnIndex="0" GridPane.rowIndex="0"/>
                         <Label fx:id="infoName" styleClass="info-value" GridPane.columnIndex="1" GridPane.rowIndex="0"/>
 
-                        <Label text="Modelo" styleClass="info-label" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
+                        <Label text="Model" styleClass="info-label" GridPane.columnIndex="0" GridPane.rowIndex="1"/>
                         <Label fx:id="infoModel" styleClass="info-value" GridPane.columnIndex="1" GridPane.rowIndex="1"/>
 
                         <Label text="iOS" styleClass="info-label" GridPane.columnIndex="0" GridPane.rowIndex="2"/>
@@ -72,7 +72,7 @@
                             </font>
                         </TextField>
 
-                        <Label text="Telefone" styleClass="info-label" GridPane.columnIndex="0" GridPane.rowIndex="5"/>
+                        <Label text="Phone" styleClass="info-label" GridPane.columnIndex="0" GridPane.rowIndex="5"/>
                         <Label fx:id="infoPhone" styleClass="info-value" GridPane.columnIndex="1" GridPane.rowIndex="5"/>
 
                         <Label text="Wi-Fi MAC" styleClass="info-label" GridPane.columnIndex="0" GridPane.rowIndex="6"/>
@@ -81,7 +81,7 @@
                 </VBox>
 
                 <VBox spacing="10" styleClass="device-section">
-                    <Label text="Bateria" styleClass="section-title">
+                    <Label text="Battery" styleClass="section-title">
                         <VBox.margin>
                             <Insets bottom="5.0"/>
                         </VBox.margin>
@@ -94,7 +94,7 @@
                 </VBox>
 
                 <VBox spacing="10" styleClass="device-section">
-                    <Label text="Armazenamento" styleClass="section-title">
+                    <Label text="Storage" styleClass="section-title">
                         <VBox.margin>
                             <Insets bottom="5.0"/>
                         </VBox.margin>
@@ -105,23 +105,23 @@
 
                 <VBox spacing="10" VBox.vgrow="ALWAYS">
                     <HBox spacing="10" alignment="CENTER_LEFT">
-                        <Label text="Apps Instalados" styleClass="section-title"/>
+                        <Label text="Installed Apps" styleClass="section-title"/>
                         <Label fx:id="appCountLabel" styleClass="info-label"/>
                         <Region HBox.hgrow="ALWAYS"/>
                         <HBox spacing="4" alignment="CENTER_LEFT">
-                            <ToggleButton fx:id="filterAll" text="Todos" styleClass="quick-filter"/>
-                            <ToggleButton fx:id="filterUser" text="Usuário" styleClass="quick-filter"/>
-                            <ToggleButton fx:id="filterSystem" text="Sistema" styleClass="quick-filter"/>
+                            <ToggleButton fx:id="filterAll" text="All" styleClass="quick-filter"/>
+                            <ToggleButton fx:id="filterUser" text="User" styleClass="quick-filter"/>
+                            <ToggleButton fx:id="filterSystem" text="System" styleClass="quick-filter"/>
                         </HBox>
-                        <TextField fx:id="appSearchField" promptText="Buscar apps..." prefWidth="200"/>
-                        <Button fx:id="uninstallButton" text="Desinstalar" onAction="#uninstallApp" disable="true"/>
+                        <TextField fx:id="appSearchField" promptText="Search apps..." prefWidth="200"/>
+                        <Button fx:id="uninstallButton" text="Uninstall" onAction="#uninstallApp" disable="true"/>
                     </HBox>
                     <TableView fx:id="appsTable" VBox.vgrow="ALWAYS">
                         <columns>
-                            <TableColumn fx:id="nameColumn" text="Nome" prefWidth="200"/>
+                            <TableColumn fx:id="nameColumn" text="Name" prefWidth="200"/>
                             <TableColumn fx:id="bundleIdColumn" text="Bundle ID" prefWidth="250"/>
-                            <TableColumn fx:id="versionColumn" text="Versão" prefWidth="100"/>
-                            <TableColumn fx:id="typeColumn" text="Tipo" prefWidth="80"/>
+                            <TableColumn fx:id="versionColumn" text="Version" prefWidth="100"/>
+                            <TableColumn fx:id="typeColumn" text="Type" prefWidth="80"/>
                         </columns>
                     </TableView>
                 </VBox>

@@ -75,6 +75,11 @@ public class WindowController {
     AppsTabController appsTabPageController;
 
     @FXML
+    AnchorPane fileSearchTabPage;
+    @FXML
+    FileSearchTabController fileSearchTabPageController;
+
+    @FXML
     AnchorPane deviceTabPage;
     @FXML
     DeviceTabController deviceTabPageController;
@@ -95,7 +100,7 @@ public class WindowController {
 
     @FXML
     public void initialize() {
-        this.lockedTabPages = Arrays.asList(this.filesTabPage, this.mediaTabPage);
+        this.lockedTabPages = Arrays.asList(this.filesTabPage, this.mediaTabPage, this.appsTabPage, this.fileSearchTabPage);
 
         this.tabPane.getSelectionModel().selectedItemProperty().addListener((observable, oldTab, newTab) -> {
             if (newTab == null) return;
@@ -126,6 +131,8 @@ public class WindowController {
                 this.mediaTabPageController.tabShown(this.selectedBackup);
             } else if (tabPage == this.appsTabPage) {
                 this.appsTabPageController.tabShown(this.selectedBackup);
+            } else if (tabPage == this.fileSearchTabPage) {
+                this.fileSearchTabPageController.tabShown(this.selectedBackup);
             }
         });
 
@@ -199,7 +206,7 @@ public class WindowController {
             this.loadBackup(backup);
             this.selectBackup(backup);
         } catch (FileNotFoundException e) {
-            Dialogs.showAlert(Alert.AlertType.ERROR, "O arquivo não foi encontrado: " + e.getMessage());
+            Dialogs.showAlert(Alert.AlertType.ERROR, "The following file was not found: " + e.getMessage());
         } catch (BackupReadException e) {
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
         }
@@ -232,7 +239,7 @@ public class WindowController {
             try {
                 Desktop.getDesktop().browse(backup.directory.toURI());
             } catch (IOException e) {
-                logger.error("Falha ao abrir diretório do backup", e);
+                logger.error("Failed to open backup directory", e);
             }
         });
 
@@ -316,6 +323,7 @@ public class WindowController {
         try {
             selectedBackup.manifest.getKeyBag().get().unlock(password);
             selectedBackup.decryptDatabase();
+            updateStatusBar();
             return true;
         } catch (InvalidKeyException e) {
             Dialogs.showAlert(Alert.AlertType.ERROR, "The given password is not valid");
@@ -324,7 +332,7 @@ public class WindowController {
         } catch (UnsupportedCryptoException e) {
             Dialogs.showAlert(Alert.AlertType.ERROR, "Your system doesn't support the necessary cryptography");
         } catch (NotUnlockedException e) {
-            logger.error("Backup não desbloqueado", e);
+            logger.error("Backup not unlocked", e);
         } catch (IOException e) {
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
         }
@@ -356,6 +364,8 @@ public class WindowController {
             this.mediaTabPageController.tabShown(backup);
         } else if (selectedTabPage == this.appsTabPage) {
             this.appsTabPageController.tabShown(backup);
+        } else if (selectedTabPage == this.fileSearchTabPage) {
+            this.fileSearchTabPageController.tabShown(backup);
         }
     }
 
@@ -415,7 +425,7 @@ public class WindowController {
             prefsWindow.getIcons().add(ITunesBackupExplorer.APP_ICON);
             prefsWindow.show();
         } catch (IOException e) {
-            logger.error("Falha ao carregar preferências", e);
+            logger.error("Failed to load preferences", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
         }
     }

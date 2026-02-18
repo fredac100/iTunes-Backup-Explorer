@@ -53,10 +53,10 @@
                     <Label fx:id="filePathLabel" styleClass="info-label" wrapText="true"/>
                 </VBox>
                 <HBox spacing="8">
-                    <Button fx:id="saveBtn" text="Salvar" onAction="#saveFile" disable="true"/>
-                    <Button fx:id="openBtn" text="Abrir" onAction="#openFile" disable="true"/>
+                    <Button fx:id="saveBtn" text="Save" onAction="#saveFile" disable="true"/>
+                    <Button fx:id="openBtn" text="Open" onAction="#openFile" disable="true"/>
                     <Region HBox.hgrow="ALWAYS"/>
-                    <Button fx:id="exportAllBtn" text="Exportar Tudo" onAction="#exportAll"/>
+                    <Button fx:id="exportAllBtn" text="Export All" onAction="#exportAll"/>
                 </HBox>
             </VBox>
         </SplitPane>

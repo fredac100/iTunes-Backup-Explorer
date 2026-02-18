@@ -52,15 +52,15 @@ public class BackupFilePaddingFixer {
             raf.seek(actualSize - 1);
             int paddingNumber = raf.read();
 
-            logger.debug("Assumindo padding de {} bytes", paddingNumber);
+            logger.debug("Assuming padding of {} bytes", paddingNumber);
 
             if (actualSize < paddingNumber) {
-                logger.debug("Arquivo muito pequeno");
+                logger.debug("File too small");
                 return;
             }
 
             if (actualSize % 16 != 0) {
-                logger.debug("Tamanho real não é múltiplo de 16. Arquivo não está com padding correto");
+                logger.debug("Actual size is not a multiple of 16. File is not correctly padded");
                 return;
             }
 
@@ -71,7 +71,7 @@ public class BackupFilePaddingFixer {
 
             for (int i = 0; i < paddingNumber; i++) {
                 if (paddingBytes[i] != paddingNumber) {
-                    logger.debug("Padding byte #{} inválido: {} != {}", i, paddingBytes[i], paddingNumber);
+                    logger.debug("Invalid padding byte #{}: {} != {}", i, paddingBytes[i], paddingNumber);
                     return;
                 }
             }

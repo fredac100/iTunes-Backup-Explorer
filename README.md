@@ -1,7 +1,7 @@
-<h1 align="center">iDevice Toolkit</h1>
+<h1 align="center">iTunes Backup Explorer</h1>
 
 <p align="center">
-  <strong>The open-source iTunes alternative for Linux.<br>Mirror your iPhone screen wirelessly, browse encrypted backups, manage apps, and explore your media — all from your desktop.</strong>
+  <strong>Open-source tool to browse encrypted iTunes backups, mirror your iPhone screen, manage apps, and explore your media — all from your desktop.</strong>
 </p>
 
 <p align="center">
@@ -23,11 +23,9 @@
 
 ---
 
-## What is iDevice Toolkit?
+## What is iTunes Backup Explorer?
 
-Apple never made iTunes for Linux. iDevice Toolkit fills that gap — and goes beyond.
-
-It's a **free, open-source desktop app** that connects your iPhone to your Linux (or Windows/macOS) machine for real-time interaction and full backup management. No cloud, no subscriptions, no data collection.
+iTunes Backup Explorer is a **free, open-source desktop app** that lets you browse and manage iPhone backups on any platform. It also connects to your iPhone for real-time interaction and full backup management. No cloud, no subscriptions, no data collection.
 
 | What you get | How it works |
 |---|---|
@@ -129,16 +127,10 @@ It's a **free, open-source desktop app** that connects your iPhone to your Linux
 
 ## Installation
 
-### Debian / Ubuntu (recommended for Linux)
-
-```bash
-sudo apt install ./path/to/iDevice-Toolkit_debian_x64.deb
-```
-
 ### Fat JAR (any platform)
 
 ```bash
-java -jar iDevice-Toolkit-2.0.jar
+java -jar itunes-backup-explorer.jar
 ```
 
 > Requires **Java 18+** with JavaFX.
@@ -149,7 +141,7 @@ These are only needed for the **Device** and **Mirror** tabs:
 
 | Dependency | Purpose |
 |------------|---------|
-| [libimobiledevice](https://libimobiledevice.org/) | Device info, app listing, screenshots, power controls (USB) |
+| [libimobiledevice](https://github.com/libimobiledevice/libimobiledevice) | Device info, app listing, screenshots, power controls (USB) — available on most platforms via their package managers |
 | [pymobiledevice3](https://github.com/doronz88/pymobiledevice3) | AirPlay screen mirroring and iOS 17+ tunnel (auto-installed via in-app wizard) |
 
 The app works fully for backup browsing, media gallery, and file management without these dependencies.
@@ -220,7 +212,7 @@ This application does **not** collect any data. It does not use an internet conn
 
 ## Origin
 
-iDevice Toolkit started as a fork of [iTunes Backup Explorer](https://github.com/MaxiHuHe04/iTunes-Backup-Explorer) by [MaxiHuHe04](https://github.com/MaxiHuHe04), which provided the foundation for encrypted backup browsing. This project extends it into a full device management toolkit with AirPlay mirroring, media gallery, live device control, and a modern UI.
+iTunes Backup Explorer is a fork of the [original iTunes Backup Explorer](https://github.com/MaxiHuHe04/iTunes-Backup-Explorer) by [MaxiHuHe04](https://github.com/MaxiHuHe04), which provided the foundation for encrypted backup browsing. This project extends it with AirPlay mirroring, media gallery, live device control, and a modern UI.
 
 **Key references:**
 - [iPhone Data Protection in Depth](https://conference.hitb.org/hitbsecconf2011ams/materials/D2T2) (HITB SecConf 2011)

@@ -34,7 +34,7 @@ public class KeyBag {
 
     private static final int BUFFER_SIZE = 16384;
 
-    // Necessário pelo formato de backup da Apple - NÃO alterar
+    // Required by Apple's backup format - DO NOT change
     private static final byte[] APPLE_BACKUP_ZERO_IV = new byte[16];
 
     public int type;
@@ -77,14 +77,14 @@ public class KeyBag {
                 } else if (tag.equals("WRAP") && this.wrap == null) {
                     int length = buffer.getInt();
                     if (length < 0 || length > buffer.remaining())
-                        throw new BackupReadException("Tamanho inválido no key bag: " + length);
+                        throw new BackupReadException("Invalid size in key bag: " + length);
 
                     this.wrap = new byte[length];
                     buffer.get(this.wrap);
                 } else if (tag.equals("UUID")) {
                     int length = buffer.getInt();
                     if (length < 0 || length > buffer.remaining())
-                        throw new BackupReadException("Tamanho inválido no key bag: " + length);
+                        throw new BackupReadException("Invalid size in key bag: " + length);
 
                     byte[] value = new byte[length];
                     buffer.get(value);
@@ -97,7 +97,7 @@ public class KeyBag {
                 } else if (CLASS_KEY_TAGS.contains(tag)) {
                     int length = buffer.getInt();
                     if (length < 0 || length > buffer.remaining())
-                        throw new BackupReadException("Tamanho inválido no key bag: " + length);
+                        throw new BackupReadException("Invalid size in key bag: " + length);
 
                     byte[] value = new byte[length];
                     buffer.get(value);
@@ -106,7 +106,7 @@ public class KeyBag {
                 } else {
                     int length = buffer.getInt();
                     if (length < 0 || length > buffer.remaining())
-                        throw new BackupReadException("Tamanho inválido no key bag: " + length);
+                        throw new BackupReadException("Invalid size in key bag: " + length);
 
                     byte[] value = new byte[length];
                     buffer.get(value);
@@ -165,7 +165,7 @@ public class KeyBag {
                     }
                 }
 
-                if (unwrappedCount == 0) throw new InvalidKeyException("Nenhuma chave de classe desembrulhada");
+                if (unwrappedCount == 0) throw new InvalidKeyException("No class keys were unwrapped");
                 this.unlocked = true;
             } finally {
                 Arrays.fill(keyEncryptionKey, (byte) 0);
@@ -229,7 +229,7 @@ public class KeyBag {
             outputStream.flush();
 
             if (size != -1L && fileOutputStream.getChannel().size() != size) {
-                logger.warn("Tamanho do arquivo no banco não corresponde ao tamanho descriptografado - esperado {}, obtido {} ({})", size, fileOutputStream.getChannel().size(), destination.getPath());
+                logger.warn("Database file size does not match decrypted size - expected {}, got {} ({})", size, fileOutputStream.getChannel().size(), destination.getPath());
             }
 
             BackupFilePaddingFixer.tryFixPadding(destination);
@@ -248,12 +248,12 @@ public class KeyBag {
             outputStream.flush();
 
             if (size != -1L && fileOutputStream.getChannel().size() != size) {
-                logger.warn("Tamanho do arquivo no banco não corresponde ao tamanho descriptografado - esperado {}, obtido {} ({})", size, fileOutputStream.getChannel().size(), destination.getPath());
+                logger.warn("Database file size does not match decrypted size - expected {}, got {} ({})", size, fileOutputStream.getChannel().size(), destination.getPath());
             }
         } catch (IOException e) {
             if (e.getCause() instanceof BadPaddingException) {
                 logger.warn("Bad padding - {} ({})", e.getMessage(), destination.getPath());
-                logger.debug("Tentando descriptografar novamente sem padding...");
+                logger.debug("Retrying decryption without padding...");
                 decryptFilePaddingFallback(protectionClass, persistentKey, source, destination, size);
             } else {
                 throw e;

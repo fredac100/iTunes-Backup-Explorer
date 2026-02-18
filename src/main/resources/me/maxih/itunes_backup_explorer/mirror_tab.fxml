@@ -10,69 +10,69 @@
     <StackPane AnchorPane.topAnchor="0.0" AnchorPane.bottomAnchor="0.0" AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0">
 
         <VBox fx:id="setupPane" alignment="CENTER" spacing="16" styleClass="device-no-device" visible="true" managed="true">
-            <Label text="Configuração Necessária" styleClass="welcome-title"/>
-            <Label text="Para espelhar a tela do iPhone, é necessário instalar o pymobiledevice3." styleClass="welcome-subtitle" wrapText="true"/>
-            <Button fx:id="setupButton" text="Instalar Dependências" onAction="#onSetupClicked"/>
+            <Label text="Setup Required" styleClass="welcome-title"/>
+            <Label text="To mirror your iPhone screen, pymobiledevice3 needs to be installed." styleClass="welcome-subtitle" wrapText="true"/>
+            <Button fx:id="setupButton" text="Install Dependencies" onAction="#onSetupClicked"/>
             <TextArea fx:id="setupLog" prefHeight="200" prefWidth="500" editable="false" wrapText="true" visible="false" managed="false" styleClass="mirror-setup-log"/>
         </VBox>
 
         <VBox fx:id="noDevicePane" alignment="CENTER" spacing="12" styleClass="device-no-device" visible="false" managed="false">
-            <Label text="Nenhum dispositivo conectado" styleClass="welcome-title"/>
-            <Label text="Conecte um iPhone via USB para espelhar a tela" styleClass="welcome-subtitle" wrapText="true"/>
+            <Label text="No device connected" styleClass="welcome-title"/>
+            <Label text="Connect an iPhone via USB to mirror its screen" styleClass="welcome-subtitle" wrapText="true"/>
             <Separator maxWidth="300"/>
-            <Label text="Ou espelhe via AirPlay (Wi-Fi):" styleClass="welcome-subtitle" wrapText="true"/>
-            <Button text="Iniciar AirPlay" onAction="#onAirPlayClicked"/>
-            <Label text="No iPhone: Central de Controle → Espelhamento de Tela → selecione 'Mirror'" styleClass="info-label" wrapText="true" textAlignment="CENTER" maxWidth="400" style="-fx-text-fill: #888;"/>
+            <Label text="Or mirror via AirPlay (Wi-Fi):" styleClass="welcome-subtitle" wrapText="true"/>
+            <Button text="Start AirPlay" onAction="#onAirPlayClicked"/>
+            <Label text="On iPhone: Control Center > Screen Mirroring > select 'Mirror'" styleClass="info-label" wrapText="true" textAlignment="CENTER" maxWidth="400" style="-fx-text-fill: #888;"/>
         </VBox>
 
         <VBox fx:id="developerModePane" alignment="CENTER" spacing="16" styleClass="device-no-device" visible="false" managed="false">
             <padding>
                 <Insets top="40" bottom="40" left="60" right="60"/>
             </padding>
-            <Label text="Modo Desenvolvedor Necessário" styleClass="welcome-title"/>
+            <Label text="Developer Mode Required" styleClass="welcome-title"/>
             <Label fx:id="developerModeDescription" wrapText="true" textAlignment="CENTER" styleClass="welcome-subtitle" maxWidth="520"
-                   text="O espelhamento de tela requer que o Modo Desenvolvedor esteja ativado no iPhone. Siga os passos abaixo para ativá-lo:"/>
+                   text="Screen mirroring requires Developer Mode to be enabled on the iPhone. Follow the steps below to enable it:"/>
             <VBox spacing="8" alignment="CENTER_LEFT" maxWidth="480" styleClass="mirror-instructions-box">
                 <padding>
                     <Insets top="12" bottom="12" left="20" right="20"/>
                 </padding>
-                <Label text="1. No iPhone, abra Ajustes" styleClass="info-value"/>
-                <Label text="2. Vá em Privacidade e Segurança" styleClass="info-value"/>
-                <Label text="3. Role até o final e toque em Modo Desenvolvedor" styleClass="info-value"/>
-                <Label text="4. Ative o Modo Desenvolvedor" styleClass="info-value"/>
-                <Label text="5. O iPhone irá reiniciar" styleClass="info-value"/>
-                <Label text="6. Após reiniciar, confirme a ativação quando solicitado" styleClass="info-value"/>
+                <Label text="1. On the iPhone, open Settings" styleClass="info-value"/>
+                <Label text="2. Go to Privacy and Security" styleClass="info-value"/>
+                <Label text="3. Scroll to the bottom and tap Developer Mode" styleClass="info-value"/>
+                <Label text="4. Enable Developer Mode" styleClass="info-value"/>
+                <Label text="5. The iPhone will restart" styleClass="info-value"/>
+                <Label text="6. After restarting, confirm activation when prompted" styleClass="info-value"/>
             </VBox>
             <HBox spacing="10" alignment="CENTER">
-                <Button text="Revelar Opção no iPhone" onAction="#onRevealDeveloperMode"/>
-                <Button fx:id="retryButton" text="Tentar Novamente" onAction="#onRetryConnection"/>
+                <Button text="Reveal Option on iPhone" onAction="#onRevealDeveloperMode"/>
+                <Button fx:id="retryButton" text="Retry" onAction="#onRetryConnection"/>
             </HBox>
             <Label fx:id="developerModeHint" styleClass="info-label" wrapText="true" textAlignment="CENTER" maxWidth="480"
-                   text="Se a opção não aparecer, clique em 'Revelar Opção no iPhone' para torná-la visível nos Ajustes."/>
+                   text="If the option doesn't appear, click 'Reveal Option on iPhone' to make it visible in Settings."/>
         </VBox>
 
         <VBox fx:id="tunnelPane" alignment="CENTER" spacing="16" styleClass="device-no-device" visible="false" managed="false">
             <padding>
                 <Insets top="40" bottom="40" left="60" right="60"/>
             </padding>
-            <Label text="Túnel Necessário (iOS 17+)" styleClass="welcome-title"/>
+            <Label text="Tunnel Required (iOS 17+)" styleClass="welcome-title"/>
             <Label wrapText="true" textAlignment="CENTER" styleClass="welcome-subtitle" maxWidth="520"
-                   text="A partir do iOS 17, a captura de tela requer um túnel de comunicação ativo. Você pode iniciá-lo de duas formas:"/>
+                   text="Starting with iOS 17, screen capture requires an active communication tunnel. You can start it in two ways:"/>
             <VBox spacing="8" alignment="CENTER_LEFT" maxWidth="520" styleClass="mirror-instructions-box">
                 <padding>
                     <Insets top="12" bottom="12" left="20" right="20"/>
                 </padding>
-                <Label text="Opção 1: Clique no botão abaixo (solicita senha de administrador)" styleClass="info-value" wrapText="true"/>
-                <Label text="Opção 2: Execute no terminal:" styleClass="info-value"/>
+                <Label text="Option 1: Click the button below (requires administrator password)" styleClass="info-value" wrapText="true"/>
+                <Label text="Option 2: Run in terminal:" styleClass="info-value"/>
                 <TextField fx:id="tunnelCommandField" editable="false" styleClass="mirror-setup-log"
                            text="sudo pymobiledevice3 remote tunneld"/>
             </VBox>
             <HBox spacing="10" alignment="CENTER">
-                <Button fx:id="startTunnelButton" text="Iniciar Túnel" onAction="#onStartTunnel"/>
-                <Button fx:id="retryTunnelButton" text="Tentar Novamente" onAction="#onRetryConnection"/>
+                <Button fx:id="startTunnelButton" text="Start Tunnel" onAction="#onStartTunnel"/>
+                <Button fx:id="retryTunnelButton" text="Retry" onAction="#onRetryConnection"/>
             </HBox>
             <Label fx:id="tunnelStatusLabel" styleClass="info-label" wrapText="true" textAlignment="CENTER" maxWidth="480"
-                   text="O túnel precisa ficar ativo durante o uso. Não feche o terminal se iniciar pelo Opção 2."/>
+                   text="The tunnel must remain active while in use. Do not close the terminal if you started it via Option 2."/>
         </VBox>
 
         <VBox fx:id="viewPane" visible="false" managed="false" spacing="0">
@@ -80,12 +80,12 @@
                 <padding>
                     <Insets top="8" bottom="8" left="14" right="14"/>
                 </padding>
-                <Label fx:id="stateIndicator" text="Conectando" styleClass="mirror-state-badge"/>
+                <Label fx:id="stateIndicator" text="Connecting" styleClass="mirror-state-badge"/>
                 <Label fx:id="fpsLabel" styleClass="info-label"/>
                 <Region HBox.hgrow="ALWAYS"/>
                 <Label fx:id="wdaStatusLabel" styleClass="info-label"/>
                 <Button fx:id="airPlayButton" text="AirPlay" onAction="#onAirPlayClicked"/>
-                <Button fx:id="startStopButton" text="Parar" onAction="#onStartStopClicked"/>
+                <Button fx:id="startStopButton" text="Stop" onAction="#onStartStopClicked"/>
             </HBox>
 
             <StackPane fx:id="screenContainer" VBox.vgrow="ALWAYS" styleClass="mirror-screen-container" style="-fx-background-color: #0a0a14;">

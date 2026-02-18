@@ -23,8 +23,8 @@ public class MediaConverter {
         if (ffmpegAvailable == null) {
             ffmpegAvailable = testCommand("ffmpeg", "-version");
             logger.info(ffmpegAvailable
-                    ? "ffmpeg detectado - thumbnails de vídeo ativados"
-                    : "ffmpeg não encontrado - vídeos usarão placeholders");
+                    ? "ffmpeg detected - video thumbnails enabled"
+                    : "ffmpeg not found - videos will use placeholders");
         }
         return ffmpegAvailable;
     }
@@ -41,8 +41,8 @@ public class MediaConverter {
                 imageMagickAvailable = false;
             }
             logger.info(imageMagickAvailable
-                    ? "ImageMagick detectado ({}) - suporte a HEIC ativado".replace("{}", imageMagickCommand)
-                    : "ImageMagick não encontrado - HEIC usará placeholders");
+                    ? "ImageMagick detected (" + imageMagickCommand + ") - HEIC support enabled"
+                    : "ImageMagick not found - HEIC will use placeholders");
         }
         return imageMagickAvailable;
     }
@@ -118,7 +118,7 @@ public class MediaConverter {
             output.delete();
             return null;
         } catch (Exception e) {
-            logger.warn("Falha ao converter HEIC {}: {}", source.getName(), e.getMessage());
+            logger.warn("Failed to convert HEIC {}: {}", source.getName(), e.getMessage());
             output.delete();
             return null;
         }
@@ -163,7 +163,7 @@ public class MediaConverter {
             output.delete();
             return null;
         } catch (Exception e) {
-            logger.warn("Falha ao extrair frame de {}: {}", source.getName(), e.getMessage());
+            logger.warn("Failed to extract frame from {}: {}", source.getName(), e.getMessage());
             output.delete();
             return null;
         }

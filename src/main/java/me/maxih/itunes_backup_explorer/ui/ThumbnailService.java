@@ -146,7 +146,7 @@ public class ThumbnailService {
                     }
                 }
             } catch (Exception e) {
-                logger.warn("Falha ao gerar thumbnail para {}: {}", file.relativePath, e.getMessage());
+                logger.warn("Failed to generate thumbnail for {}: {}", file.relativePath, e.getMessage());
                 String ext = file.getFileExtension();
                 Image placeholder = isVideo(ext) ? getVideoPlaceholder() : getPhotoPlaceholder();
                 cache.put(file.fileID, placeholder);
@@ -198,7 +198,7 @@ public class ThumbnailService {
                     }
                 }
             } catch (Exception e) {
-                logger.warn("Falha ao gerar preview para {}: {}", file.relativePath, e.getMessage());
+                logger.warn("Failed to generate preview for {}: {}", file.relativePath, e.getMessage());
                 String ext = file.getFileExtension();
                 Image placeholder = isVideo(ext) ? getVideoPlaceholder() : getPhotoPlaceholder();
                 Platform.runLater(() -> onLoaded.accept(placeholder));

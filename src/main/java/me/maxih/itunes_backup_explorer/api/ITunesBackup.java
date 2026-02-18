@@ -34,7 +34,7 @@ public class ITunesBackup {
                     } catch (FileNotFoundException e) {
                         return null;
                     } catch (BackupReadException e) {
-                        logger.error("Falha ao parsear manifest do backup em {}", dir.getAbsolutePath(), e);
+                        logger.error("Failed to parse backup manifest at {}", dir.getAbsolutePath(), e);
                         return null;
                     }
                 })
@@ -73,10 +73,10 @@ public class ITunesBackup {
             try {
                 this.loadInfo();
             } catch (BackupReadException e) {
-                logger.error("Falha ao parsear Info.plist", e);
+                logger.error("Failed to parse Info.plist", e);
             }
         } else {
-            logger.warn("Info.plist não encontrado: {}. Tentando carregar o backup mesmo assim.", this.backupInfoFile.getAbsolutePath());
+            logger.warn("Info.plist not found: {}. Attempting to load backup anyway.", this.backupInfoFile.getAbsolutePath());
         }
 
         if (this.manifest.encrypted && this.manifest.getKeyBag().isEmpty())
@@ -147,7 +147,7 @@ public class ITunesBackup {
                 this.databaseCon.close();
                 this.databaseCon = null;
             } catch (SQLException e) {
-                logger.error("Falha ao re-encriptar banco de dados", e);
+                logger.error("Failed to re-encrypt database", e);
             }
         }
 
@@ -164,7 +164,7 @@ public class ITunesBackup {
         try {
             return this.databaseCon != null && !this.databaseCon.isClosed();
         } catch (SQLException e) {
-            logger.error("Falha ao descriptografar banco de dados", e);
+            logger.error("Failed to check database connection", e);
             this.databaseCon = null;
             return false;
         }
@@ -178,7 +178,7 @@ public class ITunesBackup {
 
         try {
             databaseCon = DriverManager.getConnection("jdbc:sqlite:" + decryptedDatabaseFile.getCanonicalPath());
-            logger.info("Conexão com banco de dados estabelecida para dispositivo '{}'", this.manifest.deviceName);
+            logger.info("Database connection established for device '{}'", this.manifest.deviceName);
         } catch (SQLException | IOException e) {
             throw new DatabaseConnectionException(e);
         }
@@ -194,7 +194,7 @@ public class ITunesBackup {
             if (databaseCon != null && !databaseCon.isClosed())
                 this.databaseCon.close();
         } catch (SQLException e) {
-            logger.error("Falha ao fechar conexão com banco", e);
+            logger.error("Failed to close database connection", e);
         }
 
         try {
@@ -210,11 +210,11 @@ public class ITunesBackup {
                 }
             }
         } catch (IOException e) {
-            logger.warn("Falha ao sobrescrever arquivo temporário com zeros: {}", this.decryptedDatabaseFile.getAbsolutePath());
+            logger.warn("Failed to overwrite temporary file with zeros: {}", this.decryptedDatabaseFile.getAbsolutePath());
         }
 
         if (!this.decryptedDatabaseFile.delete())
-            logger.warn("Falha ao deletar arquivo temporário: {}", this.decryptedDatabaseFile.getAbsolutePath());
+            logger.warn("Failed to delete temporary file: {}", this.decryptedDatabaseFile.getAbsolutePath());
     }
 
     private synchronized List<BackupFile> queryFiles(String sql, StatementPreparation preparation) throws DatabaseConnectionException {
@@ -236,10 +236,10 @@ public class ITunesBackup {
                                 (NSDictionary) PropertyListParser.parse(result.getBinaryStream(5))
                         ));
                     } catch (BackupReadException e) {
-                        logger.error("Falha ao ler backup: {}", e.getMessage());
+                        logger.error("Failed to read backup: {}", e.getMessage());
                     } catch (IOException | PropertyListFormatException | ParseException | ParserConfigurationException |
                              SAXException e) {
-                        logger.error("Falha ao consultar backups", e);
+                        logger.error("Failed to query backups", e);
                     }
                 }
                 return backupFiles;
@@ -255,6 +255,20 @@ public class ITunesBackup {
                 statement -> {
                     statement.setString(1, domainLike);
                     statement.setString(2, relativePathLike);
+                }
+        );
+    }
+
+    public List<BackupFile> searchFilesFullText(String domainFilter, String searchQuery) throws DatabaseConnectionException {
+        return this.queryFiles(
+                "SELECT * FROM files WHERE `domain` LIKE ? AND " +
+                        "(`fileID` LIKE ? ESCAPE '\\' OR `domain` LIKE ? ESCAPE '\\' OR `relativePath` LIKE ? ESCAPE '\\') " +
+                        "ORDER BY `flags`, `domain`, `relativePath`",
+                statement -> {
+                    statement.setString(1, domainFilter);
+                    statement.setString(2, searchQuery);
+                    statement.setString(3, searchQuery);
+                    statement.setString(4, searchQuery);
                 }
         );
     }

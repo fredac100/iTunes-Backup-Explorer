@@ -40,7 +40,7 @@ public class FileActions {
                         Desktop.getDesktop().open(tempFile);
                     }
                 } catch (IOException e) {
-                    logger.error("Falha ao abrir arquivo com aplicativo padrão", e);
+                    logger.error("Failed to open file with default application", e);
                     javafx.application.Platform.runLater(() ->
                             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage(), ButtonType.OK)
                     );
@@ -50,7 +50,7 @@ public class FileActions {
             opener.start();
         } catch (IOException | UnsupportedCryptoException | NotUnlockedException |
                  BackupReadException exception) {
-            logger.error("Falha ao abrir arquivo", exception);
+            logger.error("Failed to open file", exception);
             Dialogs.showAlert(Alert.AlertType.ERROR, exception.getMessage(), ButtonType.OK);
         }
     }
@@ -70,7 +70,7 @@ public class FileActions {
             file.extract(destination, PreferencesController.getPreserveTimestamps());
             PreferencesController.setLastExportDirectory(destination.getParentFile());
         } catch (IOException | BackupReadException | NotUnlockedException | UnsupportedCryptoException e) {
-            logger.error("Falha ao extrair arquivo", e);
+            logger.error("Failed to extract file", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage(), ButtonType.OK);
         }
     }
@@ -88,7 +88,7 @@ public class FileActions {
             file.backup.reEncryptDatabase();
         } catch (IOException | BackupReadException | NotUnlockedException | UnsupportedCryptoException |
                  DatabaseConnectionException e) {
-            logger.error("Falha ao substituir arquivo", e);
+            logger.error("Failed to replace file", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage(), ButtonType.OK);
         }
     }
@@ -147,7 +147,7 @@ public class FileActions {
             removeCallback.accept(deletedFileIDs);
         } catch (IOException | DatabaseConnectionException | BackupReadException | UnsupportedCryptoException |
                  NotUnlockedException e) {
-            logger.error("Falha ao deletar arquivo", e);
+            logger.error("Failed to delete file", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage(), ButtonType.OK);
         }
     }
@@ -158,7 +158,7 @@ public class FileActions {
         if (files == null) return;
 
         for (File file : files) {
-            logger.info("Inserindo arquivo: {}", file.getAbsolutePath());
+            logger.info("Inserting file: {}", file.getAbsolutePath());
             // TODO: insert files
         }
     }

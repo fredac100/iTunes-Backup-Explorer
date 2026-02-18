@@ -150,7 +150,7 @@ public class FilesTabController {
                         currentDomainFiles = result;
                         buildFilteredTree(root, result);
                     } catch (DatabaseConnectionException | BackupReadException e) {
-                        logger.error("Falha ao carregar arquivos do domínio", e);
+                        logger.error("Failed to load domain files", e);
                     }
 
                     return root;
@@ -307,7 +307,7 @@ public class FilesTabController {
         try {
             domains = backup.queryDomainRoots();
         } catch (DatabaseConnectionException e) {
-            logger.error("Falha ao consultar raízes dos domínios", e);
+            logger.error("Failed to query domain roots", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
             domains = Collections.emptyList();
         }
@@ -375,7 +375,7 @@ public class FilesTabController {
         try {
             buildFilteredTree(newRoot, currentDomainFiles);
         } catch (BackupReadException e) {
-            logger.error("Falha ao aplicar filtro local de arquivos", e);
+            logger.error("Failed to apply local file filter", e);
         }
 
         filesTreeView.setRoot(newRoot);
@@ -602,7 +602,7 @@ public class FilesTabController {
         try {
             selectedFiles = selectedBackup.queryDomainFiles(true, selectedDomains);
         } catch (DatabaseConnectionException e) {
-            logger.error("Falha ao consultar arquivos dos domínios", e);
+            logger.error("Failed to query domain files", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
             return;
         }
@@ -632,7 +632,7 @@ public class FilesTabController {
                     try {
                         BackupFile file = files.get(i);
                         String fileName = file.relativePath.isEmpty() ? file.domain : file.relativePath;
-                        updateMessage("Exportando arquivo " + (i + 1) + " de " + files.size() + ": " + fileName);
+                        updateMessage("Exporting file " + (i + 1) + " of " + files.size() + ": " + fileName);
 
                         if (Thread.interrupted()) break;
                         file.extractToFolder(destination, withRelativePath, preserveTimestamps);
@@ -649,7 +649,7 @@ public class FilesTabController {
                         if (response.isEmpty() || response.get() == ButtonType.CANCEL) break;
                         if (response.get() == skipAllExistingButtonType) skipExisting = true;
                     } catch (IOException | BackupReadException | NotUnlockedException | UnsupportedCryptoException e) {
-                        logger.error("Falha ao exportar arquivo", e);
+                        logger.error("Failed to export file", e);
                         Optional<ButtonType> response = showFileExportError(
                                 e.getMessage() + "\nContinue?", ButtonType.YES, ButtonType.CANCEL);
                         if (response.isEmpty() || response.get() == ButtonType.CANCEL) break;

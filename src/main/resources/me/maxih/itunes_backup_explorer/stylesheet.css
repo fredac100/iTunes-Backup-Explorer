@@ -203,8 +203,8 @@
 
 .table-view .column-header {
     -fx-background-color: transparent;
-    -fx-border-color: transparent transparent #2a2a3e transparent;
-    -fx-border-width: 0 0 1 0;
+    -fx-border-color: transparent #3a3a4e #2a2a3e transparent;
+    -fx-border-width: 0 1 1 0;
 }
 
 .table-view .column-header .label {
@@ -386,6 +386,12 @@
 
 .info-label {
     -fx-text-fill: #888899;
+}
+
+.search-hint {
+    -fx-text-fill: #5a5a6e;
+    -fx-font-size: 12px;
+    -fx-font-style: italic;
 }
 
 .info-value {
@@ -630,6 +636,11 @@
     -fx-border-color: #c7d5e8;
 }
 
+.theme-light .table-view .column-header {
+    -fx-border-color: transparent #c7d5e8 #c7d5e8 transparent;
+    -fx-border-width: 0 1 1 0;
+}
+
 .theme-light .button,
 .theme-light .toggle-button {
     -fx-background-color: #dde7f5;
@@ -697,6 +708,10 @@
     -fx-text-fill: #355377;
 }
 
+.theme-light .search-hint {
+    -fx-text-fill: #8898b0;
+}
+
 .theme-light .quick-filter {
     -fx-background-color: #e6eef9;
     -fx-text-fill: #355377;
@@ -731,6 +746,103 @@
     -fx-background-color: #e4edf9;
     -fx-border-color: #c1d2e8;
     -fx-text-fill: #2f4f75;
+}
+
+.theme-light .tab-pane,
+.theme-light .tab-pane .tab-content-area {
+    -fx-background-color: #eef3f9;
+    -fx-border-color: transparent;
+}
+
+.theme-light .split-pane {
+    -fx-background-color: #eef3f9;
+}
+
+.theme-light .split-pane-divider {
+    -fx-background-color: #c7d5e8;
+}
+
+.theme-light .scroll-pane .viewport {
+    -fx-background-color: #eef3f9;
+}
+
+.theme-light .context-menu {
+    -fx-background-color: #f5f8fc;
+    -fx-border-color: #c7d5e8;
+}
+
+.theme-light .menu-item:focused,
+.theme-light .menu-item:hover {
+    -fx-background-color: #dde7f6;
+}
+
+.theme-light .menu-item .label {
+    -fx-text-fill: #13233a;
+}
+
+.theme-light .info-value {
+    -fx-text-fill: #13233a;
+}
+
+.theme-light .section-title {
+    -fx-text-fill: #13233a;
+}
+
+.theme-light .menu-bar {
+    -fx-border-color: transparent transparent #c7d5e8 transparent;
+}
+
+.theme-light .scroll-bar .thumb {
+    -fx-background-color: #b0bdd4;
+}
+
+.theme-light .scroll-bar .thumb:hover {
+    -fx-background-color: #95a5c0;
+}
+
+.theme-light .toggle-button:selected {
+    -fx-background-color: #2f6ac7;
+    -fx-text-fill: #ffffff;
+}
+
+.theme-light .tree-cell:selected {
+    -fx-background-color: #d0dff5;
+}
+
+.theme-light .tree-cell:selected:hover {
+    -fx-background-color: #c0d2f0;
+}
+
+.theme-light .table-row-cell:selected {
+    -fx-background-color: #d0dff5;
+}
+
+.theme-light .table-row-cell:selected:hover {
+    -fx-background-color: #c0d2f0;
+}
+
+.theme-light .list-cell:selected {
+    -fx-background-color: #d0dff5;
+}
+
+.theme-light .list-cell:selected:hover {
+    -fx-background-color: #c0d2f0;
+}
+
+.theme-light .progress-bar .track {
+    -fx-background-color: #dde7f5;
+}
+
+.theme-light .progress-bar .bar {
+    -fx-background-color: linear-gradient(to right, #2f6ac7, #4a85d6);
+}
+
+.theme-light .check-box {
+    -fx-text-fill: #13233a;
+}
+
+.theme-light .separator .line {
+    -fx-border-color: #c7d5e8;
 }
 
 .media-grid {

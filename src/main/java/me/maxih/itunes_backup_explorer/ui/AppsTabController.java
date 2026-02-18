@@ -106,7 +106,7 @@ public class AppsTabController {
             appListView.getItems().sort(String::compareTo);
 
         } catch (DatabaseConnectionException e) {
-            logger.error("Falha ao consultar domínios de apps", e);
+            logger.error("Failed to query app domains", e);
             Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
         }
     }
@@ -180,8 +180,8 @@ public class AppsTabController {
             appListView.setCursor(Cursor.DEFAULT);
             Throwable exception = loadTask.getException();
             if (exception != null) {
-                logger.error("Falha ao carregar arquivos do app", exception);
-                Dialogs.showAlert(Alert.AlertType.ERROR, "Erro ao carregar arquivos do app: " + exception.getMessage());
+                logger.error("Failed to load app files", exception);
+                Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to load app files: " + exception.getMessage());
             }
         });
 
@@ -233,7 +233,7 @@ public class AppsTabController {
         if (domain == null) return;
 
         DirectoryChooser chooser = new DirectoryChooser();
-        chooser.setTitle("Selecione o diretório de destino");
+        chooser.setTitle("Select destination directory");
         File lastDirectory = PreferencesController.getLastExportDirectory();
         if (lastDirectory != null) chooser.setInitialDirectory(lastDirectory);
         File destination = chooser.showDialog(appFilesTree.getScene().getWindow());
@@ -255,7 +255,7 @@ public class AppsTabController {
 
                     try {
                         BackupFile file = files.get(i);
-                        updateMessage("Exportando arquivo " + (i + 1) + " de " + files.size() + ": " + file.relativePath);
+                        updateMessage("Exporting file " + (i + 1) + " of " + files.size() + ": " + file.relativePath);
 
                         file.extractToFolder(destination, withRelativePath, preserveTimestamps);
                         updateProgress(i + 1, files.size());
@@ -267,13 +267,13 @@ public class AppsTabController {
                         if (file == null) file = "";
 
                         Optional<ButtonType> response = showFileExportError(
-                                "Arquivo já existe:\n" + file, skipButtonType, skipAllExistingButtonType, ButtonType.CANCEL);
+                                "File already exists:\n" + file, skipButtonType, skipAllExistingButtonType, ButtonType.CANCEL);
                         if (response.isEmpty() || response.get() == ButtonType.CANCEL) break;
                         if (response.get() == skipAllExistingButtonType) skipExisting = true;
                     } catch (IOException | BackupReadException | NotUnlockedException | UnsupportedCryptoException e) {
-                        logger.error("Falha ao exportar arquivo do app", e);
+                        logger.error("Failed to export app file", e);
                         Optional<ButtonType> response = showFileExportError(
-                                e.getMessage() + "\nContinuar?", ButtonType.YES, ButtonType.CANCEL);
+                                e.getMessage() + "\nContinue?", ButtonType.YES, ButtonType.CANCEL);
                         if (response.isEmpty() || response.get() == ButtonType.CANCEL) break;
                     }
                 }
@@ -282,7 +282,7 @@ public class AppsTabController {
             }
         };
 
-        Dialogs.ProgressAlert progress = new Dialogs.ProgressAlert("Exportando " + selectedApp + "...", exportTask, true);
+        Dialogs.ProgressAlert progress = new Dialogs.ProgressAlert("Exporting " + selectedApp + "...", exportTask, true);
         new Thread(exportTask).start();
         progress.showAndWait();
     }

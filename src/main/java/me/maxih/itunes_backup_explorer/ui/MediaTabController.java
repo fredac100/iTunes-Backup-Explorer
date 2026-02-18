@@ -90,6 +90,10 @@ public class MediaTabController {
                 previewContainer.heightProperty().subtract(28)
         );
 
+        gridScrollPane.viewportBoundsProperty().addListener((obs, oldBounds, newBounds) -> {
+            mediaGrid.setPrefWrapLength(newBounds.getWidth());
+        });
+
         Thread toolsCheck = new Thread(MediaConverter::detectTools, "media-tools-check");
         toolsCheck.setDaemon(true);
         toolsCheck.start();
@@ -137,8 +141,8 @@ public class MediaTabController {
         });
 
         task.setOnFailed(event -> {
-            logger.error("Falha ao carregar mídias", task.getException());
-            Dialogs.showAlert(Alert.AlertType.ERROR, "Falha ao carregar mídias: " + task.getException().getMessage());
+            logger.error("Failed to load media", task.getException());
+            Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to load media: " + task.getException().getMessage());
         });
 
         new Thread(task).start();
@@ -191,6 +195,8 @@ public class MediaTabController {
             VBox tile = createTile(file);
             mediaGrid.getChildren().add(tile);
         }
+
+        Platform.runLater(() -> mediaGrid.requestLayout());
     }
 
     private VBox createTile(BackupFile file) {
@@ -296,10 +302,10 @@ public class MediaTabController {
         try {
             fileToSave.extractToFolder(destination, false);
         } catch (FileAlreadyExistsException e) {
-            Dialogs.showAlert(Alert.AlertType.WARNING, "O arquivo já existe: " + e.getMessage());
+            Dialogs.showAlert(Alert.AlertType.WARNING, "File already exists: " + e.getMessage());
         } catch (IOException | BackupReadException | NotUnlockedException | UnsupportedCryptoException e) {
-            logger.error("Falha ao salvar arquivo", e);
-            Dialogs.showAlert(Alert.AlertType.ERROR, "Falha ao salvar: " + e.getMessage());
+            logger.error("Failed to save file", e);
+            Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to save: " + e.getMessage());
         }
     }
 
@@ -326,9 +332,9 @@ public class MediaTabController {
                 try {
                     Desktop.getDesktop().open(fileResult);
                 } catch (IOException e) {
-                    logger.error("Falha ao abrir arquivo", e);
+                    logger.error("Failed to open file", e);
                     Platform.runLater(() ->
-                            Dialogs.showAlert(Alert.AlertType.ERROR, "Falha ao abrir: " + e.getMessage()));
+                            Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to open: " + e.getMessage()));
                 }
             });
             opener.setDaemon(true);
@@ -336,8 +342,8 @@ public class MediaTabController {
         });
 
         task.setOnFailed(event -> {
-            logger.error("Falha ao extrair arquivo", task.getException());
-            Dialogs.showAlert(Alert.AlertType.ERROR, "Falha ao extrair: " + task.getException().getMessage());
+            logger.error("Failed to extract file", task.getException());
+            Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to extract: " + task.getException().getMessage());
         });
 
         new Thread(task).start();
@@ -371,7 +377,7 @@ public class MediaTabController {
                     } catch (FileAlreadyExistsException e) {
                         if (!skipExisting) failed++;
                     } catch (Exception e) {
-                        logger.error("Falha ao exportar {}", file.relativePath, e);
+                        logger.error("Failed to export {}", file.relativePath, e);
                         failed++;
                     }
                 }
@@ -382,13 +388,13 @@ public class MediaTabController {
         task.setOnSucceeded(event -> {
             int[] result = task.getValue();
             Dialogs.showAlert(Alert.AlertType.INFORMATION,
-                    "Exportação concluída: " + result[0] + " arquivos exportados" +
-                            (result[1] > 0 ? ", " + result[1] + " falhas" : ""));
+                    "Export complete: " + result[0] + " files exported" +
+                            (result[1] > 0 ? ", " + result[1] + " failures" : ""));
         });
 
         task.setOnFailed(event -> {
-            logger.error("Falha ao exportar mídias", task.getException());
-            Dialogs.showAlert(Alert.AlertType.ERROR, "Falha na exportação: " + task.getException().getMessage());
+            logger.error("Failed to export media", task.getException());
+            Dialogs.showAlert(Alert.AlertType.ERROR, "Export failed: " + task.getException().getMessage());
         });
 
         new Thread(task).start();

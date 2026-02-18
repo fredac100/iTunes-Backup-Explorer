@@ -151,16 +151,28 @@ def parse_jpeg_dimensions(data: bytes) -> tuple[int, int]:
 
 def _kill_uxplay() -> None:
     subprocess.run(["pkill", "-9", "-f", "uxplay"], capture_output=True)
-    time.sleep(1)
+    time.sleep(0.5)
+
+
+def _wait_uxplay_listening(port: int = 7000, timeout: float = 10.0) -> bool:
+    import socket
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection(('127.0.0.1', port), timeout=0.5) as s:
+                return True
+        except (ConnectionRefusedError, OSError, TimeoutError):
+            time.sleep(0.3)
+    return False
 
 
 def _launch_uxplay(w_fd: int) -> subprocess.Popen:
     global _active_uxplay
-    vc = (f"videoconvert ! tee name=t ! queue ! jpegenc quality=70 ! "
-          f"fdsink fd={w_fd} t. ! queue ! videoconvert")
+    vc = "videoconvert ! jpegenc quality=70"
+    vs = f"fdsink fd={w_fd} sync=false"
     proc = subprocess.Popen(
-        ["uxplay", "-nh", "-n", "Mirror", "-p", "7000", "-reset", "0",
-         "-vc", vc, "-vs", "fakesink", "-as", "0"],
+        ["uxplay", "-nh", "-n", "Mirror", "-p", "7000",
+         "-vc", vc, "-vs", vs, "-as", "0"],
         stderr=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
         pass_fds=(w_fd,),
@@ -170,7 +182,7 @@ def _launch_uxplay(w_fd: int) -> subprocess.Popen:
 
 
 def _read_airplay_frames(proc: subprocess.Popen, r_fd: int,
-                         connect_timeout: float = 20.0) -> int:
+                         connect_timeout: float = 10.0) -> int:
     uxplay_error = []
 
     def monitor_stderr():
@@ -244,7 +256,7 @@ def _read_airplay_frames(proc: subprocess.Popen, r_fd: int,
 
 def stream_airplay() -> None:
     MAX_RETRIES = 5
-    RETRY_DELAY = 2
+    RETRY_DELAY = 1
 
     for attempt in range(1, MAX_RETRIES + 1):
         print(f"INFO: Iniciando servidor AirPlay via uxplay (tentativa {attempt}/{MAX_RETRIES})...",
@@ -265,7 +277,7 @@ def stream_airplay() -> None:
 
         os.close(w_fd)
 
-        time.sleep(2.5)
+        time.sleep(1.0)
         if proc.poll() is not None:
             err = ""
             try:
@@ -290,6 +302,19 @@ def stream_airplay() -> None:
                   file=sys.stderr, flush=True)
             sys.exit(1)
 
+        if not _wait_uxplay_listening(7000, timeout=8.0):
+            print("INFO: uxplay não abriu a porta 7000 a tempo",
+                  file=sys.stderr, flush=True)
+            _cleanup_uxplay()
+            os.close(r_fd)
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_DELAY)
+                continue
+            print("MIRROR_ERROR: uxplay falhou ao iniciar servidor na porta 7000",
+                  file=sys.stderr, flush=True)
+            sys.exit(1)
+
+        time.sleep(1.5)
         print("MIRROR_AIRPLAY_READY", file=sys.stderr, flush=True)
 
         try:

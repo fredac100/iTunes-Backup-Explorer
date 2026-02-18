@@ -97,12 +97,12 @@ public class MirrorService {
                 case "NEEDS_TUNNEL" -> DeviceReadiness.NEEDS_TUNNEL;
                 case "READY" -> DeviceReadiness.READY;
                 default -> {
-                    logger.warn("Resultado inesperado do check de readiness: {}", output);
+                    logger.warn("Unexpected readiness check result: {}", output);
                     yield DeviceReadiness.CHECK_FAILED;
                 }
             };
         } catch (Exception e) {
-            logger.warn("Falha ao verificar readiness: {}", e.getMessage());
+            logger.warn("Failed to check readiness: {}", e.getMessage());
             return DeviceReadiness.CHECK_FAILED;
         }
     }
@@ -116,7 +116,7 @@ public class MirrorService {
             p.getInputStream().readAllBytes();
             p.waitFor(10, TimeUnit.SECONDS);
         } catch (Exception e) {
-            logger.warn("Falha ao revelar developer mode: {}", e.getMessage());
+            logger.warn("Failed to reveal developer mode: {}", e.getMessage());
         }
     }
 
@@ -162,7 +162,7 @@ public class MirrorService {
             conn.disconnect();
             return code == 200 && !body.contains("error");
         } catch (Exception e) {
-            logger.warn("Falha ao solicitar túnel para {}: {}", udid, e.getMessage());
+            logger.warn("Failed to request tunnel for {}: {}", udid, e.getMessage());
             return false;
         }
     }
@@ -173,7 +173,7 @@ public class MirrorService {
 
         Thread thread = new Thread(() -> {
             if (!isTunneldRunning()) {
-                logger.info("Tunneld não detectado, iniciando via pkexec...");
+                logger.info("Tunneld not detected, starting via pkexec...");
                 try {
                     new ProcessBuilder(
                             "pkexec",
@@ -181,8 +181,8 @@ public class MirrorService {
                             "remote", "tunneld", "--protocol", "tcp", "--daemonize"
                     ).start();
                 } catch (IOException e) {
-                    logger.warn("Falha ao iniciar túnel: {}", e.getMessage());
-                    errorMessage = "Não foi possível iniciar o túnel. Execute manualmente:\nsudo "
+                    logger.warn("Failed to start tunnel: {}", e.getMessage());
+                    errorMessage = "Could not start tunnel. Run manually:\nsudo "
                             + VENV_PATH.resolve("bin/pymobiledevice3") + " remote tunneld --protocol tcp --daemonize";
                     setState(State.ERROR);
                     return;
@@ -200,15 +200,15 @@ public class MirrorService {
                 }
 
                 if (!isTunneldRunning()) {
-                    errorMessage = "Tunneld não iniciou. Verifique se autenticou corretamente.\n"
-                            + "Execute manualmente: sudo " + VENV_PATH.resolve("bin/pymobiledevice3")
+                    errorMessage = "Tunneld did not start. Check that you authenticated correctly.\n"
+                            + "Run manually: sudo " + VENV_PATH.resolve("bin/pymobiledevice3")
                             + " remote tunneld --protocol tcp --daemonize";
                     setState(State.ERROR);
                     return;
                 }
             }
 
-            logger.info("Tunneld rodando, solicitando túnel para {}...", udid);
+            logger.info("Tunneld running, requesting tunnel for {}...", udid);
 
             if (!isTunnelAvailable()) {
                 requestTunnelForDevice(udid);
@@ -226,12 +226,12 @@ public class MirrorService {
             }
 
             if (!isTunnelAvailable()) {
-                errorMessage = "Túnel não foi criado para o dispositivo. Verifique se o iPhone está desbloqueado e confiou neste computador.";
+                errorMessage = "Tunnel was not created for the device. Check that the iPhone is unlocked and trusted this computer.";
                 setState(State.ERROR);
                 return;
             }
 
-            logger.info("Túnel disponível, iniciando stream...");
+            logger.info("Tunnel available, starting stream...");
             Platform.runLater(() -> start(udid, stateListenerArg, frameListener));
         });
         thread.setName("mirror-tunnel-setup");
@@ -269,7 +269,7 @@ public class MirrorService {
 
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            throw new IOException("Comando falhou com código " + exitCode + ": " + command[0]);
+            throw new IOException("Command failed with code " + exitCode + ": " + command[0]);
         }
     }
 
@@ -347,14 +347,14 @@ public class MirrorService {
                         }
                     }
                 } catch (EOFException e) {
-                    logger.info("Stream de frames encerrado");
+                    logger.info("Frame stream ended");
                     if (!Thread.currentThread().isInterrupted() && (state == State.CONNECTING || state == State.VIEW_ONLY)) {
-                        errorMessage = "Conexão encerrada.";
+                        errorMessage = "Connection closed.";
                         setState(State.ERROR);
                     }
                 } catch (IOException e) {
                     if (!Thread.currentThread().isInterrupted()) {
-                        logger.warn("Erro ao ler frames: {}", e.getMessage());
+                        logger.warn("Error reading frames: {}", e.getMessage());
                     }
                 }
             });
@@ -378,7 +378,7 @@ public class MirrorService {
                     }
                 } catch (IOException e) {
                     if (!Thread.currentThread().isInterrupted()) {
-                        logger.warn("Erro ao ler stderr: {}", e.getMessage());
+                        logger.warn("Error reading stderr: {}", e.getMessage());
                     }
                 }
             });
@@ -389,9 +389,9 @@ public class MirrorService {
             streamProcess.onExit().thenAccept(p -> {
                 int exitCode = p.exitValue();
                 if (state == State.CONNECTING) {
-                    logger.warn("Processo Python encerrou com código {} durante conexão", exitCode);
+                    logger.warn("Python process exited with code {} during connection", exitCode);
                     if (errorMessage.isEmpty()) {
-                        errorMessage = "Processo de captura encerrou inesperadamente (código " + exitCode + ")";
+                        errorMessage = "Capture process exited unexpectedly (code " + exitCode + ")";
                     }
                     setState(State.ERROR);
                 }
@@ -406,8 +406,8 @@ public class MirrorService {
             if (!airplayMode) {
                 connectingTimeoutFuture = wdaProbeExecutor.schedule(() -> {
                     if (state == State.CONNECTING) {
-                        logger.warn("Timeout de {}s aguardando conexão", CONNECTING_TIMEOUT_SECONDS);
-                        errorMessage = "Tempo limite de conexão excedido. Verifique se o dispositivo está desbloqueado e com modo desenvolvedor ativado.";
+                        logger.warn("Timeout of {}s waiting for connection", CONNECTING_TIMEOUT_SECONDS);
+                        errorMessage = "Connection timed out. Check that the device is unlocked and has developer mode enabled.";
                         setState(State.ERROR);
                         if (streamProcess != null && streamProcess.isAlive()) {
                             streamProcess.destroyForcibly();
@@ -434,7 +434,7 @@ public class MirrorService {
             }, 5, 5, TimeUnit.SECONDS);
 
         } catch (IOException e) {
-            logger.error("Falha ao iniciar processo de mirror: {}", e.getMessage());
+            logger.error("Failed to start mirror process: {}", e.getMessage());
             errorMessage = e.getMessage();
             setState(State.ERROR);
         }
@@ -518,7 +518,7 @@ public class MirrorService {
             conn.getInputStream().readAllBytes();
             conn.disconnect();
         } catch (Exception e) {
-            logger.warn("Falha ao enviar comando WDA para {}: {}", urlString, e.getMessage());
+            logger.warn("Failed to send WDA command to {}: {}", urlString, e.getMessage());
         }
     }
 

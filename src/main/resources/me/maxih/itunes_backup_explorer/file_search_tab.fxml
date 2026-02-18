@@ -21,13 +21,18 @@
 
         <HBox spacing="10" alignment="CENTER_LEFT">
             <ComboBox fx:id="domainComboBox" editable="true" prefHeight="25.0" prefWidth="250.0" promptText="All Domains"/>
-            <TextField fx:id="relativePathQueryField" prefHeight="25.0" prefWidth="200.0" promptText="Path (ex: *.jpg or Media/*)"/>
+            <TextField fx:id="relativePathQueryField" prefHeight="25.0" prefWidth="250.0" promptText="Search (name, path, domain, hash...)"/>
             <ComboBox fx:id="fileTypeComboBox" prefHeight="25.0" prefWidth="180.0" promptText="All Types"/>
             <Button mnemonicParsing="false" onAction="#searchFiles" prefHeight="25.0" prefWidth="80.0" text="Search"/>
             <Label fx:id="searchResultsCount" text="0 results" styleClass="info-label"/>
         </HBox>
     </VBox>
 
-    <Button layoutX="535.0" layoutY="407.0" mnemonicParsing="false" onAction="#exportMatching" prefHeight="25.0"
-            prefWidth="110.0" text="Export matching" AnchorPane.bottomAnchor="14.0" AnchorPane.rightAnchor="14.0"/>
+    <HBox alignment="CENTER_LEFT" spacing="10" AnchorPane.bottomAnchor="10.0" AnchorPane.leftAnchor="14.0" AnchorPane.rightAnchor="14.0">
+        <Label fx:id="searchHint" styleClass="search-hint"
+               text="Results match across all columns — a file may appear because the term was found in its path or domain, not just in the Name column."
+               visible="false" managed="false" wrapText="true" maxWidth="700"/>
+        <Region HBox.hgrow="ALWAYS"/>
+        <Button mnemonicParsing="false" onAction="#exportMatching" prefHeight="25.0" prefWidth="110.0" text="Export matching"/>
+    </HBox>
 </AnchorPane>

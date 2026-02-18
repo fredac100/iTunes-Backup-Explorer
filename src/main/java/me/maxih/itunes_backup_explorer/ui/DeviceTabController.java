@@ -192,7 +192,7 @@ public class DeviceTabController {
             List<DeviceApp> apps = (List<DeviceApp>) result[1];
             updateUI(info, apps);
         });
-        task.setOnFailed(event -> logger.error("Falha ao carregar dados do dispositivo", task.getException()));
+        task.setOnFailed(event -> logger.error("Failed to load device data", task.getException()));
         new Thread(task).start();
     }
 
@@ -238,7 +238,7 @@ public class DeviceTabController {
                 long used = info.totalDiskCapacity() - info.totalDataAvailable();
                 double ratio = (double) used / info.totalDiskCapacity();
                 storageBar.setProgress(ratio);
-                storageInfoLabel.setText(FileSize.format(used) + " usados de " + FileSize.format(info.totalDiskCapacity()));
+                storageInfoLabel.setText(FileSize.format(used) + " used of " + FileSize.format(info.totalDiskCapacity()));
             } else {
                 storageBar.setProgress(0);
                 storageInfoLabel.setText("--");
@@ -271,7 +271,7 @@ public class DeviceTabController {
 
         Optional<ButtonType> result = Dialogs.showAlert(
                 Alert.AlertType.CONFIRMATION,
-                "Desinstalar \"" + selected.name() + "\" (" + selected.bundleId() + ")?",
+                "Uninstall \"" + selected.name() + "\" (" + selected.bundleId() + ")?",
                 ButtonType.OK, ButtonType.CANCEL
         );
         if (result.isEmpty() || result.get() != ButtonType.OK) return;
@@ -288,12 +288,12 @@ public class DeviceTabController {
             if (task.getValue()) {
                 appsList.remove(selected);
                 appCountLabel.setText(appsList.size() + " apps");
-                Dialogs.showAlert(Alert.AlertType.INFORMATION, "\"" + selected.name() + "\" desinstalado com sucesso");
+                Dialogs.showAlert(Alert.AlertType.INFORMATION, "\"" + selected.name() + "\" uninstalled successfully");
             } else {
-                Dialogs.showAlert(Alert.AlertType.ERROR, "Falha ao desinstalar \"" + selected.name() + "\"");
+                Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to uninstall \"" + selected.name() + "\"");
             }
         });
-        task.setOnFailed(e -> Dialogs.showAlert(Alert.AlertType.ERROR, "Erro ao desinstalar app"));
+        task.setOnFailed(e -> Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to uninstall app"));
         new Thread(task).start();
     }
 
@@ -312,16 +312,16 @@ public class DeviceTabController {
             }
         };
         task.setOnSucceeded(e -> {
-            if (task.getValue()) Dialogs.showAlert(Alert.AlertType.INFORMATION, "Screenshot salvo: " + file.getName());
-            else Dialogs.showAlert(Alert.AlertType.ERROR, "Falha ao capturar screenshot");
+            if (task.getValue()) Dialogs.showAlert(Alert.AlertType.INFORMATION, "Screenshot saved: " + file.getName());
+            else Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to capture screenshot");
         });
-        task.setOnFailed(e -> Dialogs.showAlert(Alert.AlertType.ERROR, "Erro ao capturar screenshot"));
+        task.setOnFailed(e -> Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to capture screenshot"));
         new Thread(task).start();
     }
 
     @FXML
     private void restartDevice() {
-        Optional<ButtonType> result = Dialogs.showAlert(Alert.AlertType.CONFIRMATION, "Deseja reiniciar o dispositivo?", ButtonType.OK, ButtonType.CANCEL);
+        Optional<ButtonType> result = Dialogs.showAlert(Alert.AlertType.CONFIRMATION, "Restart the device?", ButtonType.OK, ButtonType.CANCEL);
         if (result.isPresent() && result.get() == ButtonType.OK) {
             String udid = this.currentUdid;
             new Thread(() -> DeviceService.restartDevice(udid)).start();
@@ -330,7 +330,7 @@ public class DeviceTabController {
 
     @FXML
     private void shutdownDevice() {
-        Optional<ButtonType> result = Dialogs.showAlert(Alert.AlertType.CONFIRMATION, "Deseja desligar o dispositivo?", ButtonType.OK, ButtonType.CANCEL);
+        Optional<ButtonType> result = Dialogs.showAlert(Alert.AlertType.CONFIRMATION, "Shut down the device?", ButtonType.OK, ButtonType.CANCEL);
         if (result.isPresent() && result.get() == ButtonType.OK) {
             String udid = this.currentUdid;
             new Thread(() -> DeviceService.shutdownDevice(udid)).start();
@@ -339,7 +339,7 @@ public class DeviceTabController {
 
     @FXML
     private void sleepDevice() {
-        Optional<ButtonType> result = Dialogs.showAlert(Alert.AlertType.CONFIRMATION, "Deseja suspender o dispositivo?", ButtonType.OK, ButtonType.CANCEL);
+        Optional<ButtonType> result = Dialogs.showAlert(Alert.AlertType.CONFIRMATION, "Sleep the device?", ButtonType.OK, ButtonType.CANCEL);
         if (result.isPresent() && result.get() == ButtonType.OK) {
             String udid = this.currentUdid;
             new Thread(() -> DeviceService.sleepDevice(udid)).start();

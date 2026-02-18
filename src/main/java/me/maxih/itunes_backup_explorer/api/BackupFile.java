@@ -237,7 +237,7 @@ public class BackupFile {
                 relative = withRelativePath
                         ? Paths.get(this.domain, BackupPathUtils.cleanPath(this.relativePath)).toString()
                         : BackupPathUtils.cleanPath(this.getFileName());
-                logger.warn("Continuando com caracteres inválidos substituídos: {} -> {}", this.getFileName(), relative);
+                logger.warn("Continuing with invalid characters replaced: {} -> {}", this.getFileName(), relative);
             } catch (InvalidPathException e1) {
                 throw new IOException("Invalid character in filename, failed to replace", e1);
             }
@@ -245,7 +245,7 @@ public class BackupFile {
         File destination = new File(destinationFolder.getAbsolutePath(), relative);
         if (!destination.getCanonicalPath().startsWith(destinationFolder.getCanonicalPath() + File.separator)
                 && !destination.getCanonicalPath().equals(destinationFolder.getCanonicalPath())) {
-            throw new IOException("Path traversal detectado: " + relative);
+            throw new IOException("Path traversal detected: " + relative);
         }
         if (destination.exists() && this.fileType != FileType.DIRECTORY)
             throw new FileAlreadyExistsException(destination.getAbsolutePath());
@@ -296,7 +296,7 @@ public class BackupFile {
         try {
             this.backupOriginal(true);
         } catch (FileNotFoundException e) {
-            logger.warn("Arquivo de backup deletado '{}' não tinha arquivo de conteúdo", this.relativePath);
+            logger.warn("Deleted backup file '{}' had no content file", this.relativePath);
         }
         this.backup.removeFileFromDatabase(this.fileID);
     }

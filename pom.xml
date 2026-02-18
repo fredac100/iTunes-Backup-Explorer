@@ -10,6 +10,12 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <exec.maven.plugin.version>3.3.0</exec.maven.plugin.version>
     </properties>
+    <repositories>
+        <repository>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
+        </repository>
+    </repositories>
     <dependencies>
         <dependency>
             <groupId>org.openjfx</groupId>
@@ -22,9 +28,9 @@
             <version>23</version>
         </dependency>
         <dependency>
-            <groupId>com.googlecode.plist</groupId>
+            <groupId>com.github.3breadt</groupId>
             <artifactId>dd-plist</artifactId>
-            <version>1.28</version>
+            <version>abf5a22aca</version>
         </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>

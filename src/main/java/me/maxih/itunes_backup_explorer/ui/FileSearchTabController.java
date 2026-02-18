@@ -26,6 +26,7 @@ public class FileSearchTabController {
     @FXML TextField relativePathQueryField;
     @FXML TableView<BackupFileEntry> filesTable;
     @FXML Label searchResultsCount;
+    @FXML Label searchHint;
 
     @FXML
     public void initialize() {
@@ -53,10 +54,10 @@ public class FileSearchTabController {
             return new javafx.beans.property.SimpleStringProperty(FileSize.format(size));
         });
 
-        domainColumn.prefWidthProperty().bind(this.filesTable.widthProperty().multiply(0.2));
-        nameColumn.prefWidthProperty().bind(this.filesTable.widthProperty().multiply(0.25));
+        domainColumn.prefWidthProperty().bind(this.filesTable.widthProperty().multiply(0.19));
+        nameColumn.prefWidthProperty().bind(this.filesTable.widthProperty().multiply(0.24));
         typeColumn.prefWidthProperty().bind(this.filesTable.widthProperty().multiply(0.08));
-        pathColumn.prefWidthProperty().bind(this.filesTable.widthProperty().multiply(0.35));
+        pathColumn.prefWidthProperty().bind(this.filesTable.widthProperty().multiply(0.34));
         sizeColumn.prefWidthProperty().bind(this.filesTable.widthProperty().multiply(0.12));
 
         this.filesTable.getColumns().addAll(Arrays.asList(domainColumn, nameColumn, typeColumn, pathColumn, sizeColumn));
@@ -97,11 +98,24 @@ public class FileSearchTabController {
 
     @FXML
     public void searchFiles() {
+        if (this.selectedBackup == null) {
+            logger.warn("No backup selected for search");
+            return;
+        }
+
         filesTable.getItems().clear();
 
         String domainQuery = getDomainQuery();
-        String pathQuery = relativePathQueryField.getText();
-        if (pathQuery.isEmpty()) pathQuery = "%";
+        String pathQuery = relativePathQueryField.getText().trim();
+        if (pathQuery.isEmpty()) {
+            pathQuery = "%";
+        } else if (!pathQuery.contains("%")) {
+            pathQuery = "%" + pathQuery + "%";
+        }
+
+        boolean hasSearchTerm = !pathQuery.equals("%");
+        searchHint.setVisible(hasSearchTerm);
+        searchHint.setManaged(hasSearchTerm);
 
         String selectedFileType = fileTypeComboBox.getValue();
         ITunesBackup backup = this.selectedBackup;
@@ -110,7 +124,9 @@ public class FileSearchTabController {
         javafx.concurrent.Task<List<BackupFile>> task = new javafx.concurrent.Task<>() {
             @Override
             protected List<BackupFile> call() throws Exception {
-                List<BackupFile> searchResult = backup.searchFiles(domainQuery, finalPathQuery);
+                List<BackupFile> searchResult = finalPathQuery.equals("%")
+                        ? backup.searchFiles(domainQuery, "%")
+                        : backup.searchFilesFullText(domainQuery, finalPathQuery);
 
                 if (selectedFileType != null && !selectedFileType.equals("All Types")) {
                     searchResult = filterByFileType(searchResult, selectedFileType);
@@ -140,7 +156,7 @@ public class FileSearchTabController {
         });
 
         task.setOnFailed(event -> {
-            logger.error("Falha ao buscar arquivos", task.getException());
+            logger.error("Failed to search files", task.getException());
             Dialogs.showAlert(Alert.AlertType.ERROR, task.getException().getMessage());
         });
 
@@ -221,7 +237,7 @@ public class FileSearchTabController {
             } catch (FileAlreadyExistsException e) {
                 if (!skipExisting) Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage(), ButtonType.OK);
             } catch (IOException | BackupReadException | NotUnlockedException | UnsupportedCryptoException e) {
-                logger.error("Falha ao exportar arquivo correspondente", e);
+                logger.error("Failed to export matching file", e);
                 Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage(), ButtonType.OK);
             }
         });
@@ -310,7 +326,7 @@ public class FileSearchTabController {
         });
 
         task.setOnFailed(event -> {
-            logger.error("Falha ao buscar arquivos", task.getException());
+            logger.error("Failed to search files", task.getException());
             Dialogs.showAlert(Alert.AlertType.ERROR, task.getException().getMessage());
         });
 
@@ -320,7 +336,7 @@ public class FileSearchTabController {
     public void tabShown(ITunesBackup backup) {
         if (backup == this.selectedBackup && this.filesTable.getItems() != null) return;
 
-        this.filesTable.setItems(null);
+        this.filesTable.setItems(FXCollections.observableArrayList());
         this.selectedBackup = backup;
         updateResultsCount(0, 0);
 
@@ -342,7 +358,7 @@ public class FileSearchTabController {
             domainComboBox.setItems(FXCollections.observableArrayList(domains));
             domainComboBox.setValue("All Domains");
         } catch (DatabaseConnectionException e) {
-            logger.error("Falha ao carregar domínios", e);
+            logger.error("Failed to load domains", e);
             domainComboBox.setItems(FXCollections.observableArrayList("All Domains"));
             domainComboBox.setValue("All Domains");
         }

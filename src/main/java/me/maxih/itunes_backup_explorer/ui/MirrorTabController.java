@@ -119,7 +119,7 @@ public class MirrorTabController {
                 startPolling();
             }),
             msg -> Platform.runLater(() -> {
-                setupLog.appendText("ERRO: " + msg);
+                setupLog.appendText("ERROR: " + msg);
                 setupButton.setDisable(false);
             })
         );
@@ -140,7 +140,7 @@ public class MirrorTabController {
         streaming = true;
         airPlayButton.setDisable(true);
         showPane("view");
-        startStopButton.setText("Parar");
+        startStopButton.setText("Stop");
         fpsWindowStart = System.currentTimeMillis();
         frameCount = 0;
         mirrorService.startAirPlay(this::applyState, this::updateFrame);
@@ -149,11 +149,11 @@ public class MirrorTabController {
     @FXML
     private void onRevealDeveloperMode() {
         if (currentUdid == null) return;
-        developerModeHint.setText("Enviando comando ao iPhone...");
+        developerModeHint.setText("Sending command to iPhone...");
         Thread thread = new Thread(() -> {
             mirrorService.revealDeveloperMode(currentUdid);
             Platform.runLater(() -> developerModeHint.setText(
-                    "Comando enviado. Verifique Ajustes > Privacidade e Segurança no iPhone."
+                    "Command sent. Check Settings > Privacy & Security on the iPhone."
             ));
         });
         thread.setDaemon(true);
@@ -172,7 +172,7 @@ public class MirrorTabController {
     private void onStartTunnel() {
         if (currentUdid == null) return;
         startTunnelButton.setDisable(true);
-        tunnelStatusLabel.setText("Iniciando túnel...");
+        tunnelStatusLabel.setText("Starting tunnel...");
         retryTunnelButton.setDisable(true);
         startStreamingWithTunnel();
     }
@@ -201,7 +201,7 @@ public class MirrorTabController {
         if (currentUdid == null) return;
         streaming = true;
         showPane("view");
-        startStopButton.setText("Parar");
+        startStopButton.setText("Stop");
         fpsWindowStart = System.currentTimeMillis();
         frameCount = 0;
         mirrorService.ensureTunnelAndStart(currentUdid, this::applyState, this::updateFrame);
@@ -211,7 +211,7 @@ public class MirrorTabController {
         if (currentUdid == null) return;
         streaming = true;
         showPane("view");
-        startStopButton.setText("Parar");
+        startStopButton.setText("Stop");
         fpsWindowStart = System.currentTimeMillis();
         frameCount = 0;
         mirrorService.start(currentUdid, this::applyState, this::updateFrame);
@@ -222,7 +222,7 @@ public class MirrorTabController {
         streaming = false;
         Platform.runLater(() -> {
             airPlayButton.setDisable(false);
-            startStopButton.setText("Iniciar");
+            startStopButton.setText("Start");
             connectingSpinner.setVisible(false);
             screenView.setImage(null);
             fpsLabel.setText("");
@@ -235,7 +235,7 @@ public class MirrorTabController {
     private void applyState(MirrorService.State state) {
         switch (state) {
             case CONNECTING -> {
-                stateIndicator.setText("Conectando");
+                stateIndicator.setText("Connecting");
                 stateIndicator.getStyleClass().removeIf(c -> c.startsWith("mirror-state-"));
                 stateIndicator.getStyleClass().addAll("mirror-state-badge", "mirror-state-connecting");
                 connectingSpinner.setVisible(true);
@@ -244,19 +244,19 @@ public class MirrorTabController {
                 statusLabel.setManaged(false);
             }
             case VIEW_ONLY -> {
-                stateIndicator.setText("Somente Visualização");
+                stateIndicator.setText("View Only");
                 stateIndicator.getStyleClass().removeIf(c -> c.startsWith("mirror-state-"));
                 stateIndicator.getStyleClass().addAll("mirror-state-badge", "mirror-state-view-only");
                 connectingSpinner.setVisible(false);
                 screenView.setVisible(true);
-                wdaStatusLabel.setText("Toque não disponível");
+                wdaStatusLabel.setText("Touch not available");
                 screenView.setCursor(Cursor.DEFAULT);
             }
             case INTERACTIVE -> {
-                stateIndicator.setText("Interativo");
+                stateIndicator.setText("Interactive");
                 stateIndicator.getStyleClass().removeIf(c -> c.startsWith("mirror-state-"));
                 stateIndicator.getStyleClass().addAll("mirror-state-badge", "mirror-state-interactive");
-                wdaStatusLabel.setText("Toque ativo");
+                wdaStatusLabel.setText("Touch active");
                 screenView.setCursor(Cursor.HAND);
             }
             case ERROR -> {
@@ -266,10 +266,10 @@ public class MirrorTabController {
                     startStreamingWithTunnel();
                     return;
                 }
-                stateIndicator.setText("Erro");
+                stateIndicator.setText("Error");
                 stateIndicator.getStyleClass().removeIf(c -> c.startsWith("mirror-state-"));
                 stateIndicator.getStyleClass().addAll("mirror-state-badge", "mirror-state-error");
-                statusLabel.setText(msg.isEmpty() ? "Erro na conexão com o dispositivo" : msg);
+                statusLabel.setText(msg.isEmpty() ? "Device connection error" : msg);
                 statusLabel.setVisible(true);
                 statusLabel.setManaged(true);
                 connectingSpinner.setVisible(false);

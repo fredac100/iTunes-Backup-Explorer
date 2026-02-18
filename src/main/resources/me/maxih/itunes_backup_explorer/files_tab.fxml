@@ -4,11 +4,13 @@
 <?import javafx.scene.layout.*?>
 <AnchorPane xmlns="http://javafx.com/javafx/10.0.2-internal" xmlns:fx="http://javafx.com/fxml/1"
             fx:controller="me.maxih.itunes_backup_explorer.ui.FilesTabController">
-    <VBox spacing="10" AnchorPane.leftAnchor="14.0" AnchorPane.topAnchor="10.0" AnchorPane.rightAnchor="14.0">
+    <VBox spacing="6" AnchorPane.leftAnchor="14.0" AnchorPane.topAnchor="10.0" AnchorPane.rightAnchor="14.0">
         <HBox spacing="8" alignment="CENTER_LEFT">
             <Label text="Filter" styleClass="info-label"/>
             <TextField fx:id="fileFilterField" prefWidth="280.0" promptText="Filter by path or filename"/>
-            <CheckBox fx:id="filesOnlyFilterCheckBox" text="Files only"/>
+            <CheckBox fx:id="filesOnlyFilterCheckBox" text="Hide symlinks and empty folders"/>
+        </HBox>
+        <HBox spacing="8" alignment="CENTER_LEFT">
             <Label text="Sort" styleClass="info-label"/>
             <ComboBox fx:id="sortComboBox" prefWidth="180.0"/>
             <Button fx:id="expandAllButton" text="Expand all" onAction="#expandAllFiles"/>
@@ -18,7 +20,7 @@
     </VBox>
 
     <SplitPane fx:id="splitPane" dividerPositions="0.35" AnchorPane.bottomAnchor="53.0"
-               AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="74.0">
+               AnchorPane.leftAnchor="0.0" AnchorPane.rightAnchor="0.0" AnchorPane.topAnchor="100.0">
         <items>
             <TreeView fx:id="domainsTreeView" editable="true" prefHeight="400.0" prefWidth="350.0" showRoot="false"/>
             <TreeView fx:id="filesTreeView" editable="true" prefHeight="400.0" prefWidth="650.0" showRoot="false"/>

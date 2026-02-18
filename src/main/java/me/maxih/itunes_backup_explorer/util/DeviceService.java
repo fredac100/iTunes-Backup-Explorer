@@ -19,8 +19,8 @@ public class DeviceService {
         if (libimobiledeviceAvailable == null) {
             libimobiledeviceAvailable = testCommand("idevice_id", "--help");
             logger.info(libimobiledeviceAvailable
-                    ? "libimobiledevice detectado"
-                    : "libimobiledevice não encontrado");
+                    ? "libimobiledevice detected"
+                    : "libimobiledevice not found");
         }
         return libimobiledeviceAvailable;
     }
@@ -58,7 +58,7 @@ public class DeviceService {
         if (batteryDict != null) {
             batteryLevel = getInt(batteryDict, "BatteryCurrentCapacity", 0);
             boolean charging = getBool(batteryDict, "BatteryIsCharging", false);
-            batteryStatus = charging ? "Carregando" : "Descarregando";
+            batteryStatus = charging ? "Charging" : "Discharging";
         }
 
         long totalDiskCapacity = -1;
@@ -116,7 +116,7 @@ public class DeviceService {
                 apps.add(new DeviceApp(name, bundleId, version, appType));
             }
         } catch (Exception e) {
-            logger.warn("Falha ao parsear lista de apps: {}", e.getMessage());
+            logger.warn("Failed to parse app list: {}", e.getMessage());
         }
 
         return apps;
@@ -163,7 +163,7 @@ public class DeviceService {
             Thread.currentThread().interrupt();
             return false;
         } catch (Exception e) {
-            logger.warn("Falha ao executar diagnóstico '{}': {}", command, e.getMessage());
+            logger.warn("Failed to run diagnostic '{}': {}", command, e.getMessage());
             return false;
         }
     }
@@ -201,7 +201,7 @@ public class DeviceService {
             Thread.currentThread().interrupt();
             return null;
         } catch (Exception e) {
-            logger.warn("Falha ao executar comando '{}': {}", command[0], e.getMessage());
+            logger.warn("Failed to run command '{}': {}", command[0], e.getMessage());
             return null;
         }
     }
@@ -212,7 +212,7 @@ public class DeviceService {
             NSObject parsed = PropertyListParser.parse(data);
             if (parsed instanceof NSDictionary dict) return dict;
         } catch (Exception e) {
-            logger.warn("Falha ao parsear plist: {}", e.getMessage());
+            logger.warn("Failed to parse plist: {}", e.getMessage());
         }
         return null;
     }
