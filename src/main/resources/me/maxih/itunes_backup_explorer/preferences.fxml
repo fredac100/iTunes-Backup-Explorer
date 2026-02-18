@@ -15,7 +15,7 @@
 
          <VBox spacing="10">
             <Label text="Backup Locations" styleClass="section-title"/>
-            <Label text="Diretorios monitorados automaticamente para descobrir backups" styleClass="info-label" wrapText="true"/>
+            <Label text="Directories automatically monitored to discover backups" styleClass="info-label" wrapText="true"/>
             <ListView fx:id="backupRootsListView" prefHeight="120.0">
                <VBox.margin>
                   <Insets top="5.0"/>
@@ -41,12 +41,12 @@
 
          <VBox spacing="10">
             <Label text="Explorer Behavior" styleClass="section-title"/>
-            <CheckBox fx:id="autoSelectNewestBackupCheckBox" text="Selecionar automaticamente o backup mais recente ao iniciar"/>
-            <CheckBox fx:id="expandDomainGroupsCheckBox" text="Expandir grupos de dominios automaticamente na arvore"/>
-            <CheckBox fx:id="confirmBeforeDeleteCheckBox" text="Pedir confirmacao antes de apagar arquivos"/>
-            <CheckBox fx:id="searchIncludeNonFilesCheckBox" text="Incluir pastas e links simbolicos nas buscas"/>
+            <CheckBox fx:id="autoSelectNewestBackupCheckBox" text="Automatically select the most recent backup on startup"/>
+            <CheckBox fx:id="expandDomainGroupsCheckBox" text="Automatically expand domain groups in the tree"/>
+            <CheckBox fx:id="confirmBeforeDeleteCheckBox" text="Ask for confirmation before deleting files"/>
+            <CheckBox fx:id="searchIncludeNonFilesCheckBox" text="Include folders and symbolic links in searches"/>
             <HBox spacing="10" alignment="CENTER_LEFT">
-               <Label text="Limite de resultados na busca (0 = sem limite)" styleClass="info-label" minWidth="300"/>
+               <Label text="Search result limit (0 = no limit)" styleClass="info-label" minWidth="300"/>
                <Spinner fx:id="searchResultLimitSpinner" prefWidth="120"/>
             </HBox>
          </VBox>
@@ -55,9 +55,9 @@
 
          <VBox spacing="10">
             <Label text="Export Settings" styleClass="section-title"/>
-            <CheckBox fx:id="preserveTimestampsCheckBox" text="Preservar timestamps originais dos arquivos"/>
-            <CheckBox fx:id="createDirectoryStructureCheckBox" text="Criar estrutura de diretorios na exportacao"/>
-            <CheckBox fx:id="skipExistingFilesCheckBox" text="Pular arquivos existentes automaticamente"/>
+            <CheckBox fx:id="preserveTimestampsCheckBox" text="Preserve original file timestamps"/>
+            <CheckBox fx:id="createDirectoryStructureCheckBox" text="Create directory structure on export"/>
+            <CheckBox fx:id="skipExistingFilesCheckBox" text="Automatically skip existing files"/>
          </VBox>
 
          <Separator/>
@@ -65,7 +65,7 @@
          <VBox spacing="10">
             <Label text="About" styleClass="section-title"/>
             <HBox spacing="10">
-               <Label text="Versao:" styleClass="info-label" minWidth="100.0"/>
+               <Label text="Version:" styleClass="info-label" minWidth="100.0"/>
                <Label fx:id="versionLabel" styleClass="info-value"/>
             </HBox>
             <HBox spacing="10">

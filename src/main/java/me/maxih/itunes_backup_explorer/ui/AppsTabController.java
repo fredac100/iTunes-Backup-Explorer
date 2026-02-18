@@ -90,6 +90,11 @@ public class AppsTabController {
         this.versionLabel.setText("--");
         this.exportAppButton.setDisable(true);
 
+        if (backup.isLocked()) {
+            logger.warn("Cannot load apps: backup is locked");
+            return;
+        }
+
         try {
             List<BackupFile> domains = backup.queryDomainRoots();
 
