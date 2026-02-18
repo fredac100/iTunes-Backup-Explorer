@@ -191,6 +191,18 @@ public class DeviceService {
                 "from pymobiledevice3.lockdown import create_using_usbmux",
                 "l = create_using_usbmux(serial='" + udid.replace("'", "") + "')",
                 "v = l.all_values",
+                "disk = {}",
+                "try:",
+                "    from pymobiledevice3.services.device_info import DeviceInfoService",
+                "    d = DeviceInfoService(l)",
+                "    disk = d.get_disk_usage() or {}",
+                "except Exception:",
+                "    pass",
+                "bat = {}",
+                "try:",
+                "    bat = l.get_value(domain='com.apple.mobile.battery') or {}",
+                "except Exception:",
+                "    pass",
                 "print(json.dumps({",
                 "    'DeviceName': v.get('DeviceName', ''),",
                 "    'ModelNumber': v.get('ModelNumber', ''),",
@@ -201,9 +213,14 @@ public class DeviceService {
                 "    'UniqueDeviceID': v.get('UniqueDeviceID', ''),",
                 "    'PhoneNumber': v.get('PhoneNumber', ''),",
                 "    'WiFiAddress': v.get('WiFiAddress', ''),",
+                "    'BatteryCurrentCapacity': bat.get('BatteryCurrentCapacity', 0),",
+                "    'BatteryIsCharging': bat.get('BatteryIsCharging', False),",
+                "    'TotalDiskCapacity': disk.get('TotalDiskCapacity', -1),",
+                "    'TotalDataCapacity': disk.get('TotalDataCapacity', -1),",
+                "    'AmountDataAvailable': disk.get('AmountDataAvailable', -1),",
                 "}))"
         );
-        byte[] output = runCommand(15, activePython(), "-c", script);
+        byte[] output = runCommand(30, activePython(), "-c", script);
         if (output == null) return Optional.empty();
 
         String result = new String(output, StandardCharsets.UTF_8).trim();
@@ -213,6 +230,20 @@ public class DeviceService {
         try {
             java.util.Map<String, String> values = parseSimpleJson(jsonLine);
             if (values == null) return Optional.empty();
+
+            int batteryLevel = 0;
+            String batteryStatus = "";
+            long totalDiskCapacity = -1;
+            long totalDataCapacity = -1;
+            long totalDataAvailable = -1;
+
+            try { batteryLevel = Integer.parseInt(values.getOrDefault("BatteryCurrentCapacity", "0")); } catch (NumberFormatException ignored) {}
+            boolean charging = "true".equalsIgnoreCase(values.getOrDefault("BatteryIsCharging", "false"))
+                    || "True".equals(values.getOrDefault("BatteryIsCharging", "false"));
+            batteryStatus = charging ? "Charging" : "Discharging";
+            try { totalDiskCapacity = Long.parseLong(values.getOrDefault("TotalDiskCapacity", "-1")); } catch (NumberFormatException ignored) {}
+            try { totalDataCapacity = Long.parseLong(values.getOrDefault("TotalDataCapacity", "-1")); } catch (NumberFormatException ignored) {}
+            try { totalDataAvailable = Long.parseLong(values.getOrDefault("AmountDataAvailable", "-1")); } catch (NumberFormatException ignored) {}
 
             DeviceInfo info = new DeviceInfo(
                     values.getOrDefault("DeviceName", ""),
@@ -224,7 +255,8 @@ public class DeviceService {
                     values.getOrDefault("UniqueDeviceID", ""),
                     values.getOrDefault("PhoneNumber", ""),
                     values.getOrDefault("WiFiAddress", ""),
-                    0, "", -1, -1, -1
+                    batteryLevel, batteryStatus,
+                    totalDiskCapacity, totalDataCapacity, totalDataAvailable
             );
             return Optional.of(info);
         } catch (Exception e) {

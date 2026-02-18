@@ -671,10 +671,10 @@ public class WindowController {
 
                                 String transferredText;
                                 String speedText;
+                                long elapsedMs = now - startTime[0];
                                 if (finalEstimatedTotalBytes > 0) {
                                     long transferred = (long) (pctFloat / 100.0 * finalEstimatedTotalBytes);
                                     transferredText = "Transferred: " + formatSize(transferred) + " / ~" + formatSize(finalEstimatedTotalBytes);
-                                    long elapsedMs = now - startTime[0];
                                     if (elapsedMs > 3000 && transferred > 0) {
                                         double bytesPerSec = transferred / (elapsedMs / 1000.0);
                                         speedText = "Transfer speed: " + formatSpeed(bytesPerSec);
@@ -683,7 +683,13 @@ public class WindowController {
                                     }
                                 } else {
                                     transferredText = "Progress: " + String.format(java.util.Locale.ROOT, "%.1f%%", pctFloat);
-                                    speedText = "Transfer speed: --";
+                                    if (elapsedMs > 3000 && pctFloat > 0) {
+                                        double pctPerSec = pctFloat / (elapsedMs / 1000.0);
+                                        double remainingSec = (100.0 - pctFloat) / pctPerSec;
+                                        speedText = "Transfer speed: " + String.format(java.util.Locale.ROOT, "%.1f%%/min", pctPerSec * 60);
+                                    } else {
+                                        speedText = "Transfer speed: calculating...";
+                                    }
                                 }
 
                                 Platform.runLater(() -> {
