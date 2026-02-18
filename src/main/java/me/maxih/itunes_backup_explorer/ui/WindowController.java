@@ -638,14 +638,14 @@ public class WindowController {
 
         progressStage.setScene(scene);
 
-        Pattern progressBarPattern = Pattern.compile("^\\[.*\\]\\s+\\d");
-        Pattern sizePattern = Pattern.compile("\\(([\\d.]+)\\s*(\\w+)/([\\d.]+)\\s*(\\w+)\\)");
+        Pattern ideviceProgressPattern = Pattern.compile("^\\[.*\\]\\s+\\d");
+        Pattern ideviceSizePattern = Pattern.compile("\\(([\\d.]+)\\s*(\\w+)/([\\d.]+)\\s*(\\w+)\\)");
+        Pattern tqdmPattern = Pattern.compile("(\\d+)%\\|.*\\|\\s*([\\d.]+)/([\\d.]+)\\s*\\[([^<]*)<([^,]*),\\s*(.+)]");
         int[] fileCount = {0};
         long[] lastUiUpdate = {0};
         long[] startTime = {System.currentTimeMillis()};
         double[] accumulatedBytes = {0};
         double[] prevFileTotal = {0};
-        double[] currentFileBytes = {0};
         long finalEstimatedTotalBytes = estimatedTotalBytes;
 
         javafx.concurrent.Task<DeviceService.BackupResult> task = new javafx.concurrent.Task<>() {
@@ -656,9 +656,31 @@ public class WindowController {
                             String trimmed = line.trim();
                             if (trimmed.isEmpty()) return;
 
-                            boolean isProgressLine = progressBarPattern.matcher(trimmed).find();
+                            Matcher tqdmMatcher = tqdmPattern.matcher(trimmed);
+                            if (tqdmMatcher.find()) {
+                                long now = System.currentTimeMillis();
+                                if (now - lastUiUpdate[0] < 400) return;
+                                lastUiUpdate[0] = now;
 
-                            if (!isProgressLine) {
+                                int pct = Integer.parseInt(tqdmMatcher.group(1));
+                                String elapsed = tqdmMatcher.group(4).trim();
+                                String remaining = tqdmMatcher.group(5).trim();
+                                String speed = tqdmMatcher.group(6).trim();
+
+                                Platform.runLater(() -> {
+                                    progressBar.setProgress(pct / 100.0);
+                                    percentLabel.setText(pct + "%");
+                                    statusLabel.setText("Backup in progress...");
+                                    speedLabel.setText("Speed: " + speed);
+                                    etaLabel.setText("Estimated time remaining: " + remaining);
+                                    transferredLabel.setText("Elapsed: " + elapsed);
+                                });
+                                return;
+                            }
+
+                            boolean isIdeviceProgress = ideviceProgressPattern.matcher(trimmed).find();
+
+                            if (!isIdeviceProgress) {
                                 if (trimmed.startsWith("Receiving") || trimmed.startsWith("Received")) {
                                     fileCount[0]++;
                                 }
@@ -668,7 +690,7 @@ public class WindowController {
                                 });
                             }
 
-                            Matcher sm = sizePattern.matcher(trimmed);
+                            Matcher sm = ideviceSizePattern.matcher(trimmed);
                             if (sm.find()) {
                                 long now = System.currentTimeMillis();
 
@@ -679,7 +701,6 @@ public class WindowController {
                                     accumulatedBytes[0] += prevFileTotal[0];
                                 }
                                 prevFileTotal[0] = fileTotal;
-                                currentFileBytes[0] = fileCurrent;
 
                                 if (now - lastUiUpdate[0] < 500) return;
                                 lastUiUpdate[0] = now;
