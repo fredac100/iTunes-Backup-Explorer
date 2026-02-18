@@ -657,8 +657,6 @@ public class WindowController {
                             String trimmed = line.trim();
                             if (trimmed.isEmpty()) return;
 
-                            logger.info("[backup-output] {}", trimmed);
-
                             Matcher tqdmMatcher = tqdmPattern.matcher(trimmed);
                             if (tqdmMatcher.find()) {
                                 long now = System.currentTimeMillis();
@@ -666,29 +664,36 @@ public class WindowController {
                                 lastUiUpdate[0] = now;
 
                                 int pct = Integer.parseInt(tqdmMatcher.group(1));
-                                String currentFiles = tqdmMatcher.group(2).trim();
-                                String totalFiles = tqdmMatcher.group(3).trim();
+                                double pctFloat = Double.parseDouble(tqdmMatcher.group(2));
                                 String elapsed = tqdmMatcher.group(4).trim();
                                 String remaining = tqdmMatcher.group(5).trim();
                                 String rawSpeed = tqdmMatcher.group(6).trim();
 
-                                String speedDisplay;
-                                if (rawSpeed.endsWith("s/it")) {
-                                    speedDisplay = rawSpeed.replace("s/it", "s per file");
-                                } else if (rawSpeed.endsWith("it/s")) {
-                                    speedDisplay = rawSpeed.replace("it/s", " files/s");
+                                String transferredText;
+                                String speedText;
+                                if (finalEstimatedTotalBytes > 0) {
+                                    long transferred = (long) (pctFloat / 100.0 * finalEstimatedTotalBytes);
+                                    transferredText = "Transferred: " + formatSize(transferred) + " / ~" + formatSize(finalEstimatedTotalBytes);
+                                    long elapsedMs = now - startTime[0];
+                                    if (elapsedMs > 3000 && transferred > 0) {
+                                        double bytesPerSec = transferred / (elapsedMs / 1000.0);
+                                        speedText = "Transfer speed: " + formatSpeed(bytesPerSec);
+                                    } else {
+                                        speedText = "Transfer speed: calculating...";
+                                    }
                                 } else {
-                                    speedDisplay = rawSpeed;
+                                    transferredText = "Progress: " + String.format(java.util.Locale.ROOT, "%.1f%%", pctFloat);
+                                    speedText = "Transfer speed: --";
                                 }
 
                                 Platform.runLater(() -> {
                                     progressBar.setProgress(pct / 100.0);
                                     percentLabel.setText(pct + "%");
                                     statusLabel.setText("Backup in progress...");
-                                    speedLabel.setText("Speed: " + speedDisplay);
+                                    speedLabel.setText(speedText);
                                     etaLabel.setText("Estimated time remaining: " + remaining);
-                                    transferredLabel.setText("Files: " + currentFiles + " / " + totalFiles);
-                                    filesLabel.setText("Files received: " + currentFiles);
+                                    transferredLabel.setText(transferredText);
+                                    filesLabel.setText("Elapsed: " + elapsed);
                                 });
                                 return;
                             }
