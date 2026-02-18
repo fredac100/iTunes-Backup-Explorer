@@ -509,6 +509,9 @@ public class DeviceService {
         runSetupStep(log, portablePython(), getPipPy.toString(), "--no-warn-script-location");
         Files.deleteIfExists(getPipPy);
 
+        emitLog(log, "Installing build tools...");
+        runSetupStep(log, portablePip(), "install", "setuptools", "wheel", "--no-warn-script-location");
+
         emitLog(log, "Installing pymobiledevice3...");
         runSetupStep(log, portablePip(), "install", "pymobiledevice3", "--no-warn-script-location");
 
