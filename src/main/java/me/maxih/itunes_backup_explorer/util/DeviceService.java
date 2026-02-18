@@ -725,6 +725,7 @@ public class DeviceService {
         try {
             ProcessBuilder pb = new ProcessBuilder(
                     activeCli(), "backup2", "backup", "--full", "--udid", udid, destination.getAbsolutePath());
+            pb.environment().put("PYTHONUNBUFFERED", "1");
             pb.redirectErrorStream(true);
             process = pb.start();
             Process proc = process;
