@@ -641,6 +641,7 @@ public class WindowController {
         Pattern ideviceProgressPattern = Pattern.compile("^\\[.*\\]\\s+\\d");
         Pattern ideviceSizePattern = Pattern.compile("\\(([\\d.]+)\\s*(\\w+)/([\\d.]+)\\s*(\\w+)\\)");
         Pattern tqdmPattern = Pattern.compile("(\\d+)%\\|.*\\|\\s*([\\d.]+)/([\\d.]+)\\s*\\[([^<]*)<([^,]*),\\s*(.+)]");
+        Pattern tqdmSimplePattern = Pattern.compile("(\\d+)%[|\\s]");
         int[] fileCount = {0};
         long[] lastUiUpdate = {0};
         long[] startTime = {System.currentTimeMillis()};
@@ -655,6 +656,8 @@ public class WindowController {
                         line -> {
                             String trimmed = line.trim();
                             if (trimmed.isEmpty()) return;
+
+                            logger.info("[backup-output] {}", trimmed);
 
                             Matcher tqdmMatcher = tqdmPattern.matcher(trimmed);
                             if (tqdmMatcher.find()) {
@@ -674,6 +677,21 @@ public class WindowController {
                                     speedLabel.setText("Speed: " + speed);
                                     etaLabel.setText("Estimated time remaining: " + remaining);
                                     transferredLabel.setText("Elapsed: " + elapsed);
+                                });
+                                return;
+                            }
+
+                            Matcher tqdmSimpleMatcher = tqdmSimplePattern.matcher(trimmed);
+                            if (tqdmSimpleMatcher.find()) {
+                                long now = System.currentTimeMillis();
+                                if (now - lastUiUpdate[0] < 400) return;
+                                lastUiUpdate[0] = now;
+
+                                int pct = Integer.parseInt(tqdmSimpleMatcher.group(1));
+                                Platform.runLater(() -> {
+                                    progressBar.setProgress(pct / 100.0);
+                                    percentLabel.setText(pct + "%");
+                                    statusLabel.setText("Backup in progress...");
                                 });
                                 return;
                             }
