@@ -450,11 +450,82 @@ public class WindowController {
 
     @FXML
     public void createBackup() {
-        if (!DeviceService.isLibimobiledeviceAvailable()) {
-            Dialogs.showAlert(Alert.AlertType.ERROR, "libimobiledevice not found. Please install it to create backups.");
+        if (!DeviceService.isBackupToolAvailable()) {
+            if (DeviceService.findSystemPython() == null) {
+                Dialogs.showAlert(Alert.AlertType.ERROR,
+                        "Python not found.\n\n" +
+                        "Install Python 3.8+ to enable backup creation.\n" +
+                        "Download from https://www.python.org/downloads/");
+                return;
+            }
+            showPymobiledevice3Setup();
             return;
         }
 
+        startBackupFlow();
+    }
+
+    private void showPymobiledevice3Setup() {
+        Stage setupStage = new Stage();
+        setupStage.initModality(Modality.APPLICATION_MODAL);
+        setupStage.initOwner(tabPane.getScene().getWindow());
+        setupStage.setTitle("Setting up...");
+        setupStage.getIcons().add(ITunesBackupExplorer.APP_ICON);
+
+        Label titleLabel = new Label("Installing required components");
+        titleLabel.getStyleClass().add("section-title");
+
+        Label descLabel = new Label("Installing pymobiledevice3 for device communication.\nThis is a one-time setup.");
+        descLabel.setWrapText(true);
+
+        ProgressBar progressBar = new ProgressBar(-1);
+        progressBar.setMaxWidth(Double.MAX_VALUE);
+
+        TextArea logArea = new TextArea();
+        logArea.setEditable(false);
+        logArea.setWrapText(true);
+        logArea.getStyleClass().add("mirror-setup-log");
+        logArea.setPrefHeight(250);
+        VBox.setVgrow(logArea, Priority.ALWAYS);
+
+        Button closeButton = new Button("Cancel");
+        closeButton.setOnAction(e -> setupStage.close());
+
+        VBox layout = new VBox(10, titleLabel, descLabel, progressBar, logArea, closeButton);
+        layout.setPadding(new Insets(16));
+        layout.setAlignment(Pos.TOP_LEFT);
+
+        Scene scene = new Scene(layout, 520, 400);
+        scene.getStylesheets().add(
+                ITunesBackupExplorer.class.getResource("stylesheet.css").toExternalForm());
+
+        Parent root = scene.getRoot();
+        String theme = "Light".equalsIgnoreCase(PreferencesController.getTheme()) ? "theme-light" : "theme-dark";
+        root.getStyleClass().add(theme);
+
+        setupStage.setScene(scene);
+        setupStage.show();
+
+        DeviceService.setupPymobiledevice3(
+                line -> logArea.appendText(line + "\n"),
+                () -> {
+                    setupStage.close();
+                    if (DeviceService.isPymobiledevice3Available()) {
+                        startBackupFlow();
+                    } else {
+                        Dialogs.showAlert(Alert.AlertType.ERROR, "Setup completed but pymobiledevice3 was not detected. Check the log for errors.");
+                    }
+                },
+                error -> {
+                    progressBar.setProgress(0);
+                    titleLabel.setText("Setup failed");
+                    logArea.appendText("\nERROR: " + error + "\n");
+                    closeButton.setText("Close");
+                }
+        );
+    }
+
+    private void startBackupFlow() {
         Optional<String> device = DeviceService.detectDevice();
         if (device.isEmpty()) {
             Dialogs.showAlert(Alert.AlertType.ERROR, "No device connected. Please connect an iOS device and try again.");

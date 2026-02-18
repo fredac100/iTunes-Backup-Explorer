@@ -8,6 +8,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -16,8 +17,15 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class DeviceService {
+
+    private static final Path VENV_PATH = Path.of(System.getProperty("user.home"),
+            ".config", "itunes-backup-explorer", "python-venv");
+    private static final boolean IS_WINDOWS = System.getProperty("os.name", "")
+            .toLowerCase(java.util.Locale.ROOT).contains("win");
+
     private static final Logger logger = LoggerFactory.getLogger(DeviceService.class);
     private static Boolean libimobiledeviceAvailable;
+    private static Boolean pymobiledevice3Available;
 
     public static boolean isLibimobiledeviceAvailable() {
         if (libimobiledeviceAvailable == null) {
@@ -29,22 +37,84 @@ public class DeviceService {
         return libimobiledeviceAvailable;
     }
 
+    public static boolean isPymobiledevice3Available() {
+        if (pymobiledevice3Available == null) {
+            String python = venvPython();
+            pymobiledevice3Available = testCommand(python, "-c", "import pymobiledevice3");
+            logger.info(pymobiledevice3Available
+                    ? "pymobiledevice3 detected (venv)"
+                    : "pymobiledevice3 not found in venv");
+        }
+        return pymobiledevice3Available;
+    }
+
+    public static boolean isBackupToolAvailable() {
+        return isLibimobiledeviceAvailable() || isPymobiledevice3Available();
+    }
+
+    public static String venvPython() {
+        String binDir = IS_WINDOWS ? "Scripts" : "bin";
+        String exe = IS_WINDOWS ? "python.exe" : "python3";
+        return VENV_PATH.resolve(binDir).resolve(exe).toString();
+    }
+
+    public static String venvCli() {
+        String binDir = IS_WINDOWS ? "Scripts" : "bin";
+        String exe = IS_WINDOWS ? "pymobiledevice3.exe" : "pymobiledevice3";
+        return VENV_PATH.resolve(binDir).resolve(exe).toString();
+    }
+
     public static Optional<String> detectDevice() {
-        byte[] output = runCommand(5, "idevice_id", "-l");
+        if (isLibimobiledeviceAvailable()) {
+            byte[] output = runCommand(5, "idevice_id", "-l");
+            if (output != null) {
+                String result = new String(output, StandardCharsets.UTF_8).trim();
+                if (!result.isEmpty()) {
+                    String[] lines = result.split("\n");
+                    for (String line : lines) {
+                        String trimmed = line.trim();
+                        if (!trimmed.isEmpty()) return Optional.of(trimmed);
+                    }
+                }
+            }
+        }
+
+        if (isPymobiledevice3Available()) {
+            return detectDeviceViaPymd3();
+        }
+
+        return Optional.empty();
+    }
+
+    private static Optional<String> detectDeviceViaPymd3() {
+        String script = String.join("\n",
+                "from pymobiledevice3.usbmux import list_devices",
+                "devices = list_devices()",
+                "if devices:",
+                "    print(devices[0].serial)"
+        );
+        byte[] output = runCommand(10, venvPython(), "-c", script);
         if (output == null) return Optional.empty();
 
         String result = new String(output, StandardCharsets.UTF_8).trim();
         if (result.isEmpty()) return Optional.empty();
-
-        String[] lines = result.split("\n");
-        for (String line : lines) {
-            String trimmed = line.trim();
-            if (!trimmed.isEmpty()) return Optional.of(trimmed);
-        }
-        return Optional.empty();
+        return Optional.of(result.split("\n")[0].trim());
     }
 
     public static Optional<DeviceInfo> getDeviceInfo(String udid) {
+        if (isLibimobiledeviceAvailable()) {
+            Optional<DeviceInfo> info = getDeviceInfoViaLibimobiledevice(udid);
+            if (info.isPresent()) return info;
+        }
+
+        if (isPymobiledevice3Available()) {
+            return getDeviceInfoViaPymd3(udid);
+        }
+
+        return Optional.empty();
+    }
+
+    private static Optional<DeviceInfo> getDeviceInfoViaLibimobiledevice(String udid) {
         byte[] mainOutput = runCommand(10, "ideviceinfo", "-u", udid, "-x");
         if (mainOutput == null) return Optional.empty();
 
@@ -92,6 +162,75 @@ public class DeviceService {
         );
 
         return Optional.of(info);
+    }
+
+    private static Optional<DeviceInfo> getDeviceInfoViaPymd3(String udid) {
+        String script = String.join("\n",
+                "import json",
+                "from pymobiledevice3.lockdown import create_using_usbmux",
+                "l = create_using_usbmux(serial='" + udid.replace("'", "") + "')",
+                "v = l.all_values",
+                "print(json.dumps({",
+                "    'DeviceName': v.get('DeviceName', ''),",
+                "    'ModelNumber': v.get('ModelNumber', ''),",
+                "    'ProductType': v.get('ProductType', ''),",
+                "    'ProductVersion': v.get('ProductVersion', ''),",
+                "    'BuildVersion': v.get('BuildVersion', ''),",
+                "    'SerialNumber': v.get('SerialNumber', ''),",
+                "    'UniqueDeviceID': v.get('UniqueDeviceID', ''),",
+                "    'PhoneNumber': v.get('PhoneNumber', ''),",
+                "    'WiFiAddress': v.get('WiFiAddress', ''),",
+                "}))"
+        );
+        byte[] output = runCommand(15, venvPython(), "-c", script);
+        if (output == null) return Optional.empty();
+
+        String result = new String(output, StandardCharsets.UTF_8).trim();
+        String[] lines = result.split("\n");
+        String jsonLine = lines[lines.length - 1].trim();
+
+        try {
+            java.util.Map<String, String> values = parseSimpleJson(jsonLine);
+            if (values == null) return Optional.empty();
+
+            DeviceInfo info = new DeviceInfo(
+                    values.getOrDefault("DeviceName", ""),
+                    values.getOrDefault("ModelNumber", ""),
+                    values.getOrDefault("ProductType", ""),
+                    values.getOrDefault("ProductVersion", ""),
+                    values.getOrDefault("BuildVersion", ""),
+                    values.getOrDefault("SerialNumber", ""),
+                    values.getOrDefault("UniqueDeviceID", ""),
+                    values.getOrDefault("PhoneNumber", ""),
+                    values.getOrDefault("WiFiAddress", ""),
+                    0, "", -1, -1, -1
+            );
+            return Optional.of(info);
+        } catch (Exception e) {
+            logger.warn("Failed to parse pymobiledevice3 device info: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    private static java.util.Map<String, String> parseSimpleJson(String json) {
+        try {
+            json = json.trim();
+            if (!json.startsWith("{") || !json.endsWith("}")) return null;
+            json = json.substring(1, json.length() - 1);
+
+            java.util.Map<String, String> map = new java.util.HashMap<>();
+            String[] pairs = json.split(",(?=\\s*\")");
+            for (String pair : pairs) {
+                String[] kv = pair.split(":", 2);
+                if (kv.length != 2) continue;
+                String key = kv[0].trim().replaceAll("^\"|\"$", "");
+                String value = kv[1].trim().replaceAll("^\"|\"$", "");
+                map.put(key, value);
+            }
+            return map;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     public static List<DeviceApp> getApps(String udid, boolean system) {
@@ -245,10 +384,89 @@ public class DeviceService {
         return defaultValue;
     }
 
+    public static String findSystemPython() {
+        for (String candidate : IS_WINDOWS
+                ? new String[]{"python", "python3", "py"}
+                : new String[]{"python3", "python"}) {
+            if (testCommand(candidate, "--version")) return candidate;
+        }
+        return null;
+    }
+
+    public static boolean isVenvReady() {
+        return java.nio.file.Files.isExecutable(Path.of(venvPython()));
+    }
+
+    private static String venvPip() {
+        String binDir = IS_WINDOWS ? "Scripts" : "bin";
+        String exe = IS_WINDOWS ? "pip.exe" : "pip";
+        return VENV_PATH.resolve(binDir).resolve(exe).toString();
+    }
+
+    public static void setupPymobiledevice3(Consumer<String> onProgressLine,
+                                             Runnable onDone, Consumer<String> onError) {
+        Thread setupThread = new Thread(() -> {
+            try {
+                String python = findSystemPython();
+                if (python == null) {
+                    javafx.application.Platform.runLater(() ->
+                            onError.accept("Python not found. Please install Python 3.8+ and try again."));
+                    return;
+                }
+
+                runSetupStep(onProgressLine, python, "-m", "venv", VENV_PATH.toString());
+                runSetupStep(onProgressLine, venvPip(), "install", "--upgrade", "pip");
+                runSetupStep(onProgressLine, venvPip(), "install", "pymobiledevice3");
+
+                pymobiledevice3Available = null;
+                javafx.application.Platform.runLater(onDone);
+            } catch (Exception e) {
+                javafx.application.Platform.runLater(() -> onError.accept(e.getMessage()));
+            }
+        });
+        setupThread.setName("pymobiledevice3-setup");
+        setupThread.setDaemon(true);
+        setupThread.start();
+    }
+
+    private static void runSetupStep(Consumer<String> onProgressLine, String... command)
+            throws java.io.IOException, InterruptedException {
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
+        Process process = pb.start();
+
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String finalLine = line;
+                javafx.application.Platform.runLater(() -> onProgressLine.accept(finalLine));
+            }
+        }
+
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            throw new java.io.IOException("Command failed with exit code " + exitCode + ": " + command[0]);
+        }
+    }
+
     public enum BackupResult { SUCCESS, CANCELLED, FAILED }
 
     public static BackupResult createBackup(String udid, File destination,
                                             Consumer<String> onProgressLine, Supplier<Boolean> isCancelled) {
+        if (isLibimobiledeviceAvailable()) {
+            return createBackupViaLibimobiledevice(udid, destination, onProgressLine, isCancelled);
+        }
+
+        if (isPymobiledevice3Available()) {
+            return createBackupViaPymd3(udid, destination, onProgressLine, isCancelled);
+        }
+
+        return BackupResult.FAILED;
+    }
+
+    private static BackupResult createBackupViaLibimobiledevice(String udid, File destination,
+                                                                 Consumer<String> onProgressLine, Supplier<Boolean> isCancelled) {
         try {
             ProcessBuilder pb = new ProcessBuilder(
                     "idevicebackup2", "backup", "--udid", udid, destination.getAbsolutePath());
@@ -273,7 +491,38 @@ public class DeviceService {
             Thread.currentThread().interrupt();
             return BackupResult.FAILED;
         } catch (Exception e) {
-            logger.warn("Failed to create backup: {}", e.getMessage());
+            logger.warn("Failed to create backup via libimobiledevice: {}", e.getMessage());
+            return BackupResult.FAILED;
+        }
+    }
+
+    private static BackupResult createBackupViaPymd3(String udid, File destination,
+                                                      Consumer<String> onProgressLine, Supplier<Boolean> isCancelled) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                    venvCli(), "mobilebackup2", "backup", "--udid", udid, destination.getAbsolutePath());
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (isCancelled.get()) {
+                        process.destroyForcibly();
+                        return BackupResult.CANCELLED;
+                    }
+                    onProgressLine.accept(line);
+                }
+            }
+
+            int exitCode = process.waitFor();
+            return exitCode == 0 ? BackupResult.SUCCESS : BackupResult.FAILED;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return BackupResult.FAILED;
+        } catch (Exception e) {
+            logger.warn("Failed to create backup via pymobiledevice3: {}", e.getMessage());
             return BackupResult.FAILED;
         }
     }

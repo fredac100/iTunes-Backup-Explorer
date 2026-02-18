@@ -27,7 +27,6 @@ public class MirrorService {
     }
 
     private static final Logger logger = LoggerFactory.getLogger(MirrorService.class);
-    private static final Path VENV_PATH = Path.of(System.getProperty("user.home"), ".config", "itunes-backup-explorer", "python-venv");
 
     private static final int CONNECTING_TIMEOUT_SECONDS = 30;
 
@@ -50,17 +49,7 @@ public class MirrorService {
     }
 
     public boolean isVenvReady() {
-        try {
-            Process p = new ProcessBuilder(
-                    VENV_PATH.resolve("bin/python3").toString(),
-                    "-c", "import pymobiledevice3"
-            ).redirectErrorStream(true).start();
-            p.getInputStream().readAllBytes();
-            boolean finished = p.waitFor(10, TimeUnit.SECONDS);
-            return finished && p.exitValue() == 0;
-        } catch (Exception e) {
-            return false;
-        }
+        return DeviceService.isPymobiledevice3Available();
     }
 
     public DeviceReadiness checkDeviceReadiness(String udid) {
@@ -81,7 +70,7 @@ public class MirrorService {
 
         try {
             Process p = new ProcessBuilder(
-                    VENV_PATH.resolve("bin/python3").toString(), "-c", script
+                    DeviceService.venvPython(), "-c", script
             ).redirectErrorStream(true).start();
 
             String output = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
@@ -110,7 +99,7 @@ public class MirrorService {
     public void revealDeveloperMode(String udid) {
         try {
             Process p = new ProcessBuilder(
-                    VENV_PATH.resolve("bin/pymobiledevice3").toString(),
+                    DeviceService.venvCli(),
                     "amfi", "reveal-developer-mode", "--udid", udid
             ).redirectErrorStream(true).start();
             p.getInputStream().readAllBytes();
@@ -177,13 +166,13 @@ public class MirrorService {
                 try {
                     new ProcessBuilder(
                             "pkexec",
-                            VENV_PATH.resolve("bin/pymobiledevice3").toString(),
+                            DeviceService.venvCli(),
                             "remote", "tunneld", "--protocol", "tcp", "--daemonize"
                     ).start();
                 } catch (IOException e) {
                     logger.warn("Failed to start tunnel: {}", e.getMessage());
                     errorMessage = "Could not start tunnel. Run manually:\nsudo "
-                            + VENV_PATH.resolve("bin/pymobiledevice3") + " remote tunneld --protocol tcp --daemonize";
+                            + DeviceService.venvCli() + " remote tunneld --protocol tcp --daemonize";
                     setState(State.ERROR);
                     return;
                 }
@@ -201,7 +190,7 @@ public class MirrorService {
 
                 if (!isTunneldRunning()) {
                     errorMessage = "Tunneld did not start. Check that you authenticated correctly.\n"
-                            + "Run manually: sudo " + VENV_PATH.resolve("bin/pymobiledevice3")
+                            + "Run manually: sudo " + DeviceService.venvCli()
                             + " remote tunneld --protocol tcp --daemonize";
                     setState(State.ERROR);
                     return;
@@ -240,37 +229,7 @@ public class MirrorService {
     }
 
     public void setup(Consumer<String> progressLog, Runnable onDone, Consumer<String> onError) {
-        Thread setupThread = new Thread(() -> {
-            try {
-                runSetupStep(progressLog, "python3", "-m", "venv", VENV_PATH.toString());
-                runSetupStep(progressLog, VENV_PATH.resolve("bin/pip").toString(), "install", "--upgrade", "pip");
-                runSetupStep(progressLog, VENV_PATH.resolve("bin/pip").toString(), "install", "pymobiledevice3");
-                Platform.runLater(onDone);
-            } catch (Exception e) {
-                Platform.runLater(() -> onError.accept(e.getMessage()));
-            }
-        });
-        setupThread.setDaemon(true);
-        setupThread.start();
-    }
-
-    private void runSetupStep(Consumer<String> progressLog, String... command) throws IOException, InterruptedException {
-        ProcessBuilder pb = new ProcessBuilder(command);
-        pb.redirectErrorStream(true);
-        Process process = pb.start();
-
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String finalLine = line;
-                Platform.runLater(() -> progressLog.accept(finalLine));
-            }
-        }
-
-        int exitCode = process.waitFor();
-        if (exitCode != 0) {
-            throw new IOException("Command failed with code " + exitCode + ": " + command[0]);
-        }
+        DeviceService.setupPymobiledevice3(progressLog, onDone, onError);
     }
 
     public void startAirPlay(Consumer<State> stateListenerArg, Consumer<byte[]> frameListener) {
@@ -303,7 +262,7 @@ public class MirrorService {
             tempScript.toFile().deleteOnExit();
 
             java.util.List<String> cmd = new java.util.ArrayList<>();
-            cmd.add(isVenvReady() ? VENV_PATH.resolve("bin/python3").toString() : "python3");
+            cmd.add(isVenvReady() ? DeviceService.venvPython() : "python3");
             cmd.add("-u");
             cmd.add(tempScript.toString());
             for (String arg : scriptArgs) cmd.add(arg);
