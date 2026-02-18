@@ -788,8 +788,33 @@ public class WindowController {
             }
         };
 
-        cancelButton.setOnAction(e -> task.cancel());
-        progressStage.setOnCloseRequest(e -> task.cancel());
+        Runnable confirmCancel = () -> {
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+            confirm.setTitle("Cancel Backup");
+            confirm.setHeaderText("Are you sure you want to cancel the backup?");
+            confirm.setContentText("The backup in progress will be stopped and any partial data may be incomplete.");
+            confirm.initOwner(progressStage);
+            confirm.initModality(javafx.stage.Modality.WINDOW_MODAL);
+
+            DialogPane dp = confirm.getDialogPane();
+            dp.getStylesheets().add(
+                    ITunesBackupExplorer.class.getResource("stylesheet.css").toExternalForm());
+            String confirmTheme = "Light".equalsIgnoreCase(PreferencesController.getTheme()) ? "theme-light" : "theme-dark";
+            dp.getStyleClass().add(confirmTheme);
+
+            confirm.showAndWait().ifPresent(response -> {
+                if (response == ButtonType.OK) {
+                    task.cancel();
+                    progressStage.close();
+                }
+            });
+        };
+
+        cancelButton.setOnAction(e -> confirmCancel.run());
+        progressStage.setOnCloseRequest(e -> {
+            e.consume();
+            confirmCancel.run();
+        });
 
         task.setOnSucceeded(event -> Platform.runLater(() -> {
             DeviceService.BackupResult result = task.getValue();

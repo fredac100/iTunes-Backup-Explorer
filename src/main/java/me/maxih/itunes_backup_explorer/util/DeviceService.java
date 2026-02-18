@@ -642,16 +642,26 @@ public class DeviceService {
             pb.redirectErrorStream(true);
             Process process = pb.start();
 
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (isCancelled.get()) {
-                        process.destroyForcibly();
-                        return BackupResult.CANCELLED;
+            Thread readerThread = new Thread(() -> {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        onProgressLine.accept(line);
                     }
-                    onProgressLine.accept(line);
+                } catch (IOException ignored) {
                 }
+            }, "idevice-reader");
+            readerThread.setDaemon(true);
+            readerThread.start();
+
+            while (readerThread.isAlive()) {
+                if (isCancelled.get()) {
+                    process.descendants().forEach(ProcessHandle::destroyForcibly);
+                    process.destroyForcibly();
+                    return BackupResult.CANCELLED;
+                }
+                readerThread.join(200);
             }
 
             int exitCode = process.waitFor();
@@ -673,26 +683,36 @@ public class DeviceService {
             pb.redirectErrorStream(true);
             Process process = pb.start();
 
-            try (InputStreamReader isr = new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
-                StringBuilder sb = new StringBuilder();
-                int ch;
-                while ((ch = isr.read()) != -1) {
-                    if (isCancelled.get()) {
-                        process.destroyForcibly();
-                        return BackupResult.CANCELLED;
-                    }
-                    if (ch == '\r' || ch == '\n') {
-                        if (!sb.isEmpty()) {
-                            onProgressLine.accept(sb.toString());
-                            sb.setLength(0);
+            Thread readerThread = new Thread(() -> {
+                try (InputStreamReader isr = new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
+                    StringBuilder sb = new StringBuilder();
+                    int ch;
+                    while ((ch = isr.read()) != -1) {
+                        if (ch == '\r' || ch == '\n') {
+                            if (!sb.isEmpty()) {
+                                onProgressLine.accept(sb.toString());
+                                sb.setLength(0);
+                            }
+                        } else {
+                            sb.append((char) ch);
                         }
-                    } else {
-                        sb.append((char) ch);
                     }
+                    if (!sb.isEmpty()) {
+                        onProgressLine.accept(sb.toString());
+                    }
+                } catch (IOException ignored) {
                 }
-                if (!sb.isEmpty()) {
-                    onProgressLine.accept(sb.toString());
+            }, "pymd3-reader");
+            readerThread.setDaemon(true);
+            readerThread.start();
+
+            while (readerThread.isAlive()) {
+                if (isCancelled.get()) {
+                    process.descendants().forEach(ProcessHandle::destroyForcibly);
+                    process.destroyForcibly();
+                    return BackupResult.CANCELLED;
                 }
+                readerThread.join(200);
             }
 
             int exitCode = process.waitFor();
