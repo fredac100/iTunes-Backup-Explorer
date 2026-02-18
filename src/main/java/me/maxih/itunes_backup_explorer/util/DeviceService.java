@@ -193,9 +193,7 @@ public class DeviceService {
                 "v = l.all_values",
                 "disk = {}",
                 "try:",
-                "    from pymobiledevice3.services.device_info import DeviceInfoService",
-                "    d = DeviceInfoService(l)",
-                "    disk = d.get_disk_usage() or {}",
+                "    disk = l.get_value(domain='com.apple.disk_usage') or {}",
                 "except Exception:",
                 "    pass",
                 "bat = {}",
@@ -668,15 +666,17 @@ public class DeviceService {
 
     private static BackupResult createBackupViaLibimobiledevice(String udid, File destination,
                                                                  Consumer<String> onProgressLine, Supplier<Boolean> isCancelled) {
+        Process process = null;
         try {
             ProcessBuilder pb = new ProcessBuilder(
                     "idevicebackup2", "backup", "--udid", udid, destination.getAbsolutePath());
             pb.redirectErrorStream(true);
-            Process process = pb.start();
+            process = pb.start();
+            Process proc = process;
 
             Thread readerThread = new Thread(() -> {
                 try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                        new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
                         onProgressLine.accept(line);
@@ -689,18 +689,30 @@ public class DeviceService {
 
             while (readerThread.isAlive()) {
                 if (isCancelled.get()) {
-                    process.descendants().forEach(ProcessHandle::destroyForcibly);
-                    process.destroyForcibly();
+                    proc.descendants().forEach(ProcessHandle::destroyForcibly);
+                    proc.destroyForcibly();
                     return BackupResult.CANCELLED;
                 }
-                readerThread.join(200);
+                try {
+                    readerThread.join(200);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    proc.descendants().forEach(ProcessHandle::destroyForcibly);
+                    proc.destroyForcibly();
+                    return BackupResult.CANCELLED;
+                }
             }
 
-            int exitCode = process.waitFor();
-            return exitCode == 0 ? BackupResult.SUCCESS : BackupResult.FAILED;
+            boolean finished = process.waitFor(60, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                return BackupResult.FAILED;
+            }
+            return process.exitValue() == 0 ? BackupResult.SUCCESS : BackupResult.FAILED;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return BackupResult.FAILED;
+            if (process != null) process.destroyForcibly();
+            return BackupResult.CANCELLED;
         } catch (Exception e) {
             logger.warn("Failed to create backup via libimobiledevice: {}", e.getMessage());
             return BackupResult.FAILED;
@@ -709,14 +721,16 @@ public class DeviceService {
 
     private static BackupResult createBackupViaPymd3(String udid, File destination,
                                                       Consumer<String> onProgressLine, Supplier<Boolean> isCancelled) {
+        Process process = null;
         try {
             ProcessBuilder pb = new ProcessBuilder(
                     activeCli(), "backup2", "backup", "--full", "--udid", udid, destination.getAbsolutePath());
             pb.redirectErrorStream(true);
-            Process process = pb.start();
+            process = pb.start();
+            Process proc = process;
 
             Thread readerThread = new Thread(() -> {
-                try (InputStreamReader isr = new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
+                try (InputStreamReader isr = new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8)) {
                     StringBuilder sb = new StringBuilder();
                     int ch;
                     while ((ch = isr.read()) != -1) {
@@ -740,18 +754,30 @@ public class DeviceService {
 
             while (readerThread.isAlive()) {
                 if (isCancelled.get()) {
-                    process.descendants().forEach(ProcessHandle::destroyForcibly);
-                    process.destroyForcibly();
+                    proc.descendants().forEach(ProcessHandle::destroyForcibly);
+                    proc.destroyForcibly();
                     return BackupResult.CANCELLED;
                 }
-                readerThread.join(200);
+                try {
+                    readerThread.join(200);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    proc.descendants().forEach(ProcessHandle::destroyForcibly);
+                    proc.destroyForcibly();
+                    return BackupResult.CANCELLED;
+                }
             }
 
-            int exitCode = process.waitFor();
-            return exitCode == 0 ? BackupResult.SUCCESS : BackupResult.FAILED;
+            boolean finished = process.waitFor(60, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                return BackupResult.FAILED;
+            }
+            return process.exitValue() == 0 ? BackupResult.SUCCESS : BackupResult.FAILED;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return BackupResult.FAILED;
+            if (process != null) process.destroyForcibly();
+            return BackupResult.CANCELLED;
         } catch (Exception e) {
             logger.warn("Failed to create backup via pymobiledevice3: {}", e.getMessage());
             return BackupResult.FAILED;

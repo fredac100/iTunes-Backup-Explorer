@@ -667,7 +667,6 @@ public class WindowController {
                                 double pctFloat = Double.parseDouble(tqdmMatcher.group(2));
                                 String elapsed = tqdmMatcher.group(4).trim();
                                 String remaining = tqdmMatcher.group(5).trim();
-                                String rawSpeed = tqdmMatcher.group(6).trim();
 
                                 String transferredText;
                                 String speedText;
@@ -685,7 +684,6 @@ public class WindowController {
                                     transferredText = "Progress: " + String.format(java.util.Locale.ROOT, "%.1f%%", pctFloat);
                                     if (elapsedMs > 3000 && pctFloat > 0) {
                                         double pctPerSec = pctFloat / (elapsedMs / 1000.0);
-                                        double remainingSec = (100.0 - pctFloat) / pctPerSec;
                                         speedText = "Transfer speed: " + String.format(java.util.Locale.ROOT, "%.1f%%/min", pctPerSec * 60);
                                     } else {
                                         speedText = "Transfer speed: calculating...";
@@ -855,6 +853,12 @@ public class WindowController {
                     cancelButton.setText("Close");
                     cancelButton.setOnAction(e -> progressStage.close());
                 }
+            }
+        }));
+
+        task.setOnCancelled(event -> Platform.runLater(() -> {
+            if (progressStage.isShowing()) {
+                progressStage.close();
             }
         }));
 
