@@ -643,6 +643,7 @@ public class WindowController {
         Pattern tqdmPattern = Pattern.compile("(\\d+)%\\|.*\\|\\s*([\\d.]+)/([\\d.]+)\\s*\\[([^<]*)<([^,]*),\\s*(.+)]");
         Pattern tqdmSimplePattern = Pattern.compile("(\\d+)%[|\\s]");
         int[] fileCount = {0};
+        int[] lastLoggedPct = {-1};
         long[] lastUiUpdate = {0};
         long[] startTime = {System.currentTimeMillis()};
         double[] accumulatedBytes = {0};
@@ -690,6 +691,13 @@ public class WindowController {
                                     }
                                 }
 
+                                int logPct = pct / 5 * 5;
+                                boolean shouldLog = logPct > lastLoggedPct[0] && logPct % 5 == 0;
+                                if (shouldLog) lastLoggedPct[0] = logPct;
+                                String logEntry = shouldLog
+                                        ? "[" + elapsed + "] " + pct + "% - " + transferredText.replace("Transferred: ", "").replace("Progress: ", "") + "\n"
+                                        : null;
+
                                 Platform.runLater(() -> {
                                     progressBar.setProgress(pct / 100.0);
                                     percentLabel.setText(pct + "%");
@@ -698,6 +706,7 @@ public class WindowController {
                                     etaLabel.setText("Estimated time remaining: " + remaining);
                                     transferredLabel.setText(transferredText);
                                     filesLabel.setText("Elapsed: " + elapsed);
+                                    if (logEntry != null) logArea.appendText(logEntry);
                                 });
                                 return;
                             }
