@@ -4,17 +4,21 @@ import com.dd.plist.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStreamReader;
+import java.io.*;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 public class DeviceService {
 
@@ -39,11 +43,14 @@ public class DeviceService {
 
     public static boolean isPymobiledevice3Available() {
         if (pymobiledevice3Available == null) {
-            String python = venvPython();
-            pymobiledevice3Available = testCommand(python, "-c", "import pymobiledevice3");
+            if (isPortablePymd3Ready()) {
+                pymobiledevice3Available = testCommand(portablePython(), "-c", "import pymobiledevice3");
+            } else {
+                pymobiledevice3Available = testCommand(venvPython(), "-c", "import pymobiledevice3");
+            }
             logger.info(pymobiledevice3Available
-                    ? "pymobiledevice3 detected (venv)"
-                    : "pymobiledevice3 not found in venv");
+                    ? "pymobiledevice3 detected"
+                    : "pymobiledevice3 not found");
         }
         return pymobiledevice3Available;
     }
@@ -62,6 +69,16 @@ public class DeviceService {
         String binDir = IS_WINDOWS ? "Scripts" : "bin";
         String exe = IS_WINDOWS ? "pymobiledevice3.exe" : "pymobiledevice3";
         return VENV_PATH.resolve(binDir).resolve(exe).toString();
+    }
+
+    public static String activePython() {
+        if (isPortablePythonReady()) return portablePython();
+        return venvPython();
+    }
+
+    public static String activeCli() {
+        if (isPortablePymd3Ready()) return portableCli();
+        return venvCli();
     }
 
     public static Optional<String> detectDevice() {
@@ -93,7 +110,7 @@ public class DeviceService {
                 "if devices:",
                 "    print(devices[0].serial)"
         );
-        byte[] output = runCommand(10, venvPython(), "-c", script);
+        byte[] output = runCommand(10, activePython(), "-c", script);
         if (output == null) return Optional.empty();
 
         String result = new String(output, StandardCharsets.UTF_8).trim();
@@ -182,7 +199,7 @@ public class DeviceService {
                 "    'WiFiAddress': v.get('WiFiAddress', ''),",
                 "}))"
         );
-        byte[] output = runCommand(15, venvPython(), "-c", script);
+        byte[] output = runCommand(15, activePython(), "-c", script);
         if (output == null) return Optional.empty();
 
         String result = new String(output, StandardCharsets.UTF_8).trim();
@@ -384,6 +401,14 @@ public class DeviceService {
         return defaultValue;
     }
 
+    private static final String PORTABLE_PYTHON_VERSION = "3.12.8";
+    private static final String PORTABLE_PYTHON_URL =
+            "https://www.python.org/ftp/python/" + PORTABLE_PYTHON_VERSION
+                    + "/python-" + PORTABLE_PYTHON_VERSION + "-embed-amd64.zip";
+    private static final String GET_PIP_URL = "https://bootstrap.pypa.io/get-pip.py";
+
+    private static final Path PORTABLE_PYTHON_PATH = VENV_PATH.resolveSibling("python-portable");
+
     public static String findSystemPython() {
         for (String candidate : IS_WINDOWS
                 ? new String[]{"python", "python3", "py"}
@@ -393,8 +418,20 @@ public class DeviceService {
         return null;
     }
 
+    private static String portablePython() {
+        return PORTABLE_PYTHON_PATH.resolve("python.exe").toString();
+    }
+
+    private static String portablePip() {
+        return PORTABLE_PYTHON_PATH.resolve("Scripts").resolve("pip.exe").toString();
+    }
+
+    private static String portableCli() {
+        return PORTABLE_PYTHON_PATH.resolve("Scripts").resolve("pymobiledevice3.exe").toString();
+    }
+
     public static boolean isVenvReady() {
-        return java.nio.file.Files.isExecutable(Path.of(venvPython()));
+        return Files.isExecutable(Path.of(venvPython()));
     }
 
     private static String venvPip() {
@@ -403,21 +440,23 @@ public class DeviceService {
         return VENV_PATH.resolve(binDir).resolve(exe).toString();
     }
 
+    public static boolean isPortablePythonReady() {
+        return IS_WINDOWS && Files.isExecutable(PORTABLE_PYTHON_PATH.resolve("python.exe"));
+    }
+
+    public static boolean isPortablePymd3Ready() {
+        return IS_WINDOWS && Files.isExecutable(PORTABLE_PYTHON_PATH.resolve("Scripts").resolve("pymobiledevice3.exe"));
+    }
+
     public static void setupPymobiledevice3(Consumer<String> onProgressLine,
                                              Runnable onDone, Consumer<String> onError) {
         Thread setupThread = new Thread(() -> {
             try {
-                String python = findSystemPython();
-                if (python == null) {
-                    javafx.application.Platform.runLater(() ->
-                            onError.accept("Python not found. Please install Python 3.8+ and try again."));
-                    return;
+                if (IS_WINDOWS) {
+                    setupOnWindows(onProgressLine);
+                } else {
+                    setupOnUnix(onProgressLine);
                 }
-
-                runSetupStep(onProgressLine, python, "-m", "venv", VENV_PATH.toString());
-                runSetupStep(onProgressLine, venvPip(), "install", "--upgrade", "pip");
-                runSetupStep(onProgressLine, venvPip(), "install", "pymobiledevice3");
-
                 pymobiledevice3Available = null;
                 javafx.application.Platform.runLater(onDone);
             } catch (Exception e) {
@@ -429,8 +468,131 @@ public class DeviceService {
         setupThread.start();
     }
 
+    private static void setupOnUnix(Consumer<String> log) throws IOException, InterruptedException {
+        String python = findSystemPython();
+        if (python == null) {
+            throw new IOException("Python not found. Install Python 3.8+ via your package manager.");
+        }
+        runSetupStep(log, python, "-m", "venv", VENV_PATH.toString());
+        runSetupStep(log, venvPip(), "install", "--upgrade", "pip");
+        runSetupStep(log, venvPip(), "install", "pymobiledevice3");
+    }
+
+    private static void setupOnWindows(Consumer<String> log) throws IOException, InterruptedException {
+        String systemPython = findSystemPython();
+
+        if (systemPython != null) {
+            emitLog(log, "Using system Python: " + systemPython);
+            runSetupStep(log, systemPython, "-m", "venv", VENV_PATH.toString());
+            runSetupStep(log, venvPip(), "install", "--upgrade", "pip");
+            runSetupStep(log, venvPip(), "install", "pymobiledevice3");
+            return;
+        }
+
+        emitLog(log, "Python not found on system. Downloading portable Python " + PORTABLE_PYTHON_VERSION + "...");
+        Files.createDirectories(PORTABLE_PYTHON_PATH);
+
+        Path zipFile = PORTABLE_PYTHON_PATH.resolve("python-embed.zip");
+        downloadFile(PORTABLE_PYTHON_URL, zipFile, log);
+
+        emitLog(log, "Extracting Python...");
+        extractZip(zipFile, PORTABLE_PYTHON_PATH);
+        Files.deleteIfExists(zipFile);
+
+        enablePipSupport();
+
+        Path getPipPy = PORTABLE_PYTHON_PATH.resolve("get-pip.py");
+        emitLog(log, "Downloading pip installer...");
+        downloadFile(GET_PIP_URL, getPipPy, log);
+
+        emitLog(log, "Installing pip...");
+        runSetupStep(log, portablePython(), getPipPy.toString(), "--no-warn-script-location");
+        Files.deleteIfExists(getPipPy);
+
+        emitLog(log, "Installing pymobiledevice3...");
+        runSetupStep(log, portablePip(), "install", "pymobiledevice3", "--no-warn-script-location");
+
+        emitLog(log, "Setup complete.");
+    }
+
+    private static void enablePipSupport() throws IOException {
+        try (var stream = Files.list(PORTABLE_PYTHON_PATH)) {
+            stream.filter(p -> p.getFileName().toString().matches("python\\d+\\._pth"))
+                    .findFirst()
+                    .ifPresent(pthFile -> {
+                        try {
+                            String content = Files.readString(pthFile, StandardCharsets.UTF_8);
+                            String updated = content.replace("#import site", "import site");
+                            Files.writeString(pthFile, updated, StandardCharsets.UTF_8);
+                        } catch (IOException e) {
+                            logger.warn("Failed to patch _pth file: {}", e.getMessage());
+                        }
+                    });
+        }
+    }
+
+    private static void downloadFile(String urlStr, Path destination, Consumer<String> log) throws IOException {
+        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+        conn.setConnectTimeout(30_000);
+        conn.setReadTimeout(60_000);
+        conn.setInstanceFollowRedirects(true);
+        conn.setRequestMethod("GET");
+
+        int responseCode = conn.getResponseCode();
+        if (responseCode != 200) {
+            conn.disconnect();
+            throw new IOException("Download failed (HTTP " + responseCode + "): " + urlStr);
+        }
+
+        long totalSize = conn.getContentLengthLong();
+        long downloaded = 0;
+        int lastPercent = -1;
+
+        try (InputStream in = conn.getInputStream();
+             OutputStream out = Files.newOutputStream(destination)) {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = in.read(buffer)) != -1) {
+                out.write(buffer, 0, bytesRead);
+                downloaded += bytesRead;
+                if (totalSize > 0) {
+                    int percent = (int) (downloaded * 100 / totalSize);
+                    if (percent != lastPercent && percent % 10 == 0) {
+                        lastPercent = percent;
+                        String msg = "Downloading... " + percent + "% (" + (downloaded / 1024) + " KB)";
+                        emitLog(log, msg);
+                    }
+                }
+            }
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    private static void extractZip(Path zipFile, Path targetDir) throws IOException {
+        try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(zipFile))) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                Path entryPath = targetDir.resolve(entry.getName()).normalize();
+                if (!entryPath.startsWith(targetDir)) continue;
+
+                if (entry.isDirectory()) {
+                    Files.createDirectories(entryPath);
+                } else {
+                    Files.createDirectories(entryPath.getParent());
+                    Files.copy(zis, entryPath, StandardCopyOption.REPLACE_EXISTING);
+                }
+                zis.closeEntry();
+            }
+        }
+    }
+
+    private static void emitLog(Consumer<String> log, String message) {
+        javafx.application.Platform.runLater(() -> log.accept(message));
+    }
+
     private static void runSetupStep(Consumer<String> onProgressLine, String... command)
-            throws java.io.IOException, InterruptedException {
+            throws IOException, InterruptedException {
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
         Process process = pb.start();
@@ -446,7 +608,7 @@ public class DeviceService {
 
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            throw new java.io.IOException("Command failed with exit code " + exitCode + ": " + command[0]);
+            throw new IOException("Command failed with exit code " + exitCode + ": " + command[0]);
         }
     }
 
@@ -500,7 +662,7 @@ public class DeviceService {
                                                       Consumer<String> onProgressLine, Supplier<Boolean> isCancelled) {
         try {
             ProcessBuilder pb = new ProcessBuilder(
-                    venvCli(), "mobilebackup2", "backup", "--udid", udid, destination.getAbsolutePath());
+                    activeCli(), "mobilebackup2", "backup", "--udid", udid, destination.getAbsolutePath());
             pb.redirectErrorStream(true);
             Process process = pb.start();
 

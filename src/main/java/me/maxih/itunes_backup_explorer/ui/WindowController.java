@@ -451,13 +451,6 @@ public class WindowController {
     @FXML
     public void createBackup() {
         if (!DeviceService.isBackupToolAvailable()) {
-            if (DeviceService.findSystemPython() == null) {
-                Dialogs.showAlert(Alert.AlertType.ERROR,
-                        "Python not found.\n\n" +
-                        "Install Python 3.8+ to enable backup creation.\n" +
-                        "Download from https://www.python.org/downloads/");
-                return;
-            }
             showPymobiledevice3Setup();
             return;
         }

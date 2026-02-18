@@ -70,7 +70,7 @@ public class MirrorService {
 
         try {
             Process p = new ProcessBuilder(
-                    DeviceService.venvPython(), "-c", script
+                    DeviceService.activePython(), "-c", script
             ).redirectErrorStream(true).start();
 
             String output = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
@@ -99,7 +99,7 @@ public class MirrorService {
     public void revealDeveloperMode(String udid) {
         try {
             Process p = new ProcessBuilder(
-                    DeviceService.venvCli(),
+                    DeviceService.activeCli(),
                     "amfi", "reveal-developer-mode", "--udid", udid
             ).redirectErrorStream(true).start();
             p.getInputStream().readAllBytes();
@@ -166,13 +166,13 @@ public class MirrorService {
                 try {
                     new ProcessBuilder(
                             "pkexec",
-                            DeviceService.venvCli(),
+                            DeviceService.activeCli(),
                             "remote", "tunneld", "--protocol", "tcp", "--daemonize"
                     ).start();
                 } catch (IOException e) {
                     logger.warn("Failed to start tunnel: {}", e.getMessage());
                     errorMessage = "Could not start tunnel. Run manually:\nsudo "
-                            + DeviceService.venvCli() + " remote tunneld --protocol tcp --daemonize";
+                            + DeviceService.activeCli() + " remote tunneld --protocol tcp --daemonize";
                     setState(State.ERROR);
                     return;
                 }
@@ -190,7 +190,7 @@ public class MirrorService {
 
                 if (!isTunneldRunning()) {
                     errorMessage = "Tunneld did not start. Check that you authenticated correctly.\n"
-                            + "Run manually: sudo " + DeviceService.venvCli()
+                            + "Run manually: sudo " + DeviceService.activeCli()
                             + " remote tunneld --protocol tcp --daemonize";
                     setState(State.ERROR);
                     return;
@@ -262,7 +262,7 @@ public class MirrorService {
             tempScript.toFile().deleteOnExit();
 
             java.util.List<String> cmd = new java.util.ArrayList<>();
-            cmd.add(isVenvReady() ? DeviceService.venvPython() : "python3");
+            cmd.add(isVenvReady() ? DeviceService.activePython() : "python3");
             cmd.add("-u");
             cmd.add(tempScript.toString());
             for (String arg : scriptArgs) cmd.add(arg);
