@@ -208,6 +208,10 @@ public class WindowController {
             ITunesBackup backup = new ITunesBackup(backupDirectory);
             this.loadBackup(backup);
             this.selectBackup(backup);
+            File parentDir = backupDirectory.getParentFile();
+            if (parentDir != null) {
+                PreferencesController.addBackupRoot(parentDir.getAbsolutePath());
+            }
         } catch (FileNotFoundException e) {
             Dialogs.showAlert(Alert.AlertType.ERROR, "The following file was not found: " + e.getMessage());
         } catch (BackupReadException e) {
@@ -441,16 +445,7 @@ public class WindowController {
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("iTunes Backup", "Manifest.plist", "Manifest.db"));
         File source = chooser.showOpenDialog(tabPane.getScene().getWindow());
         if (source == null) return;
-
-        try {
-            ITunesBackup backup = new ITunesBackup(source.getParentFile());
-            this.loadBackup(backup);
-            this.selectBackup(backup);
-        } catch (FileNotFoundException e) {
-            Dialogs.showAlert(Alert.AlertType.ERROR, "The following file was not found: " + e.getMessage());
-        } catch (BackupReadException e) {
-            Dialogs.showAlert(Alert.AlertType.ERROR, e.getMessage());
-        }
+        openBackup(source.getParentFile());
     }
 
     @FXML
