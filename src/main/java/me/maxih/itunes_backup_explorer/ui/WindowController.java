@@ -666,17 +666,29 @@ public class WindowController {
                                 lastUiUpdate[0] = now;
 
                                 int pct = Integer.parseInt(tqdmMatcher.group(1));
+                                String currentFiles = tqdmMatcher.group(2).trim();
+                                String totalFiles = tqdmMatcher.group(3).trim();
                                 String elapsed = tqdmMatcher.group(4).trim();
                                 String remaining = tqdmMatcher.group(5).trim();
-                                String speed = tqdmMatcher.group(6).trim();
+                                String rawSpeed = tqdmMatcher.group(6).trim();
+
+                                String speedDisplay;
+                                if (rawSpeed.endsWith("s/it")) {
+                                    speedDisplay = rawSpeed.replace("s/it", "s per file");
+                                } else if (rawSpeed.endsWith("it/s")) {
+                                    speedDisplay = rawSpeed.replace("it/s", " files/s");
+                                } else {
+                                    speedDisplay = rawSpeed;
+                                }
 
                                 Platform.runLater(() -> {
                                     progressBar.setProgress(pct / 100.0);
                                     percentLabel.setText(pct + "%");
                                     statusLabel.setText("Backup in progress...");
-                                    speedLabel.setText("Speed: " + speed);
+                                    speedLabel.setText("Speed: " + speedDisplay);
                                     etaLabel.setText("Estimated time remaining: " + remaining);
-                                    transferredLabel.setText("Elapsed: " + elapsed);
+                                    transferredLabel.setText("Files: " + currentFiles + " / " + totalFiles);
+                                    filesLabel.setText("Files received: " + currentFiles);
                                 });
                                 return;
                             }
