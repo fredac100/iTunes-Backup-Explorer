@@ -669,7 +669,7 @@ public class DeviceService {
                                                       Consumer<String> onProgressLine, Supplier<Boolean> isCancelled) {
         try {
             ProcessBuilder pb = new ProcessBuilder(
-                    activeCli(), "mobilebackup2", "backup", "--udid", udid, destination.getAbsolutePath());
+                    activeCli(), "backup2", "backup", "--udid", udid, destination.getAbsolutePath());
             pb.redirectErrorStream(true);
             Process process = pb.start();
 
