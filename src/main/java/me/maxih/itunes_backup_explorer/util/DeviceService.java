@@ -24,8 +24,12 @@ public class DeviceService {
 
     private static final Path VENV_PATH = Path.of(System.getProperty("user.home"),
             ".config", "itunes-backup-explorer", "python-venv");
-    private static final boolean IS_WINDOWS = System.getProperty("os.name", "")
+    static final boolean IS_WINDOWS = System.getProperty("os.name", "")
             .toLowerCase(java.util.Locale.ROOT).contains("win");
+
+    public static boolean isWindows() {
+        return IS_WINDOWS;
+    }
 
     private static final Logger logger = LoggerFactory.getLogger(DeviceService.class);
     private static Boolean libimobiledeviceAvailable;

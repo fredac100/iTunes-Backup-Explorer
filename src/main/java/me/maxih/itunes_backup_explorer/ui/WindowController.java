@@ -521,7 +521,19 @@ public class WindowController {
     private void startBackupFlow() {
         Optional<String> device = DeviceService.detectDevice();
         if (device.isEmpty()) {
-            Dialogs.showAlert(Alert.AlertType.ERROR, "No device connected. Please connect an iOS device and try again.");
+            String msg = "No device detected.\n\n";
+            if (DeviceService.isWindows()) {
+                msg += "Make sure that:\n"
+                     + "• Apple Devices (or iTunes) is installed\n"
+                     + "• The iPhone is connected via USB and unlocked\n"
+                     + "• You tapped \"Trust\" on the device when prompted\n\n"
+                     + "Download Apple Devices from the Microsoft Store if not installed.";
+            } else {
+                msg += "Make sure that:\n"
+                     + "• The iPhone is connected via USB and unlocked\n"
+                     + "• You tapped \"Trust\" on the device when prompted";
+            }
+            Dialogs.showAlert(Alert.AlertType.ERROR, msg);
             return;
         }
 
