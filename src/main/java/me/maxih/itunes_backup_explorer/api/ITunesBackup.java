@@ -305,9 +305,25 @@ public class ITunesBackup {
         try (Statement stmt = this.databaseCon.createStatement();
              ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM files")) {
             long count = rs.next() ? rs.getLong(1) : 0;
-            return new long[]{count, -1};
+            long size = calculateDirectorySize();
+            return new long[]{count, size};
         } catch (SQLException e) {
             throw new DatabaseConnectionException(e);
+        }
+    }
+
+    private long calculateDirectorySize() {
+        try (var paths = Files.walk(directory.toPath())) {
+            return paths
+                    .filter(Files::isRegularFile)
+                    .mapToLong(p -> {
+                        try { return Files.size(p); }
+                        catch (IOException e) { return 0; }
+                    })
+                    .sum();
+        } catch (IOException e) {
+            logger.warn("Failed to calculate backup size: {}", e.getMessage());
+            return -1;
         }
     }
 

@@ -13,19 +13,14 @@
                 <MenuBar BorderPane.alignment="CENTER">
                     <Menu mnemonicParsing="false" text="File">
                         <MenuItem mnemonicParsing="false" onAction="#fileOpenBackup" text="Open backup..."/>
-                        <MenuItem mnemonicParsing="false" onAction="#reloadBackupsAction" text="Reload backup roots"/>
+                        <MenuItem mnemonicParsing="false" onAction="#createBackup" text="Create backup..."/>
+                        <MenuItem mnemonicParsing="false" onAction="#reloadBackupsAction" text="Reload backups"/>
                         <SeparatorMenuItem mnemonicParsing="false"/>
                         <MenuItem mnemonicParsing="false" onAction="#openPreferences" text="Preferences..."/>
                         <SeparatorMenuItem mnemonicParsing="false"/>
                         <MenuItem mnemonicParsing="false" onAction="#quit" text="Quit"/>
                     </Menu>
-                    <Menu disable="true" mnemonicParsing="false" text="Edit">
-                        <MenuItem mnemonicParsing="false" text="Undo"/>
-                        <MenuItem mnemonicParsing="false" text="Redo"/>
-                        <SeparatorMenuItem mnemonicParsing="false"/>
-                        <MenuItem mnemonicParsing="false" text="Select All"/>
-                        <MenuItem mnemonicParsing="false" text="Unselect All"/>
-                    </Menu>
+
                     <Menu mnemonicParsing="false" text="Help">
                         <MenuItem mnemonicParsing="false" onAction="#helpAbout" text="About iTunes Backup Explorer"/>
                     </Menu>
@@ -79,6 +74,7 @@
 
             <HBox alignment="CENTER" spacing="10">
                 <Button text="Open Backup..." onAction="#fileOpenBackup"/>
+                <Button text="Create Backup..." onAction="#createBackup"/>
                 <Button text="Preferences" onAction="#openPreferences"/>
             </HBox>
 

@@ -47,6 +47,17 @@ public class PreferencesController {
         return roots.isEmpty() ? new String[0] : roots.split("\\n");
     }
 
+    public static boolean addBackupRoot(String path) {
+        String[] existing = getBackupRoots();
+        for (String root : existing) {
+            if (root.trim().equals(path)) return false;
+        }
+        String roots = PREFERENCES.get(KEY_BACKUP_ROOTS, DEFAULT_ROOTS);
+        String updated = roots.isEmpty() ? path : roots + "\n" + path;
+        PREFERENCES.put(KEY_BACKUP_ROOTS, updated);
+        return true;
+    }
+
     public static String getTheme() {
         return PREFERENCES.get(KEY_THEME, DEFAULT_THEME);
     }

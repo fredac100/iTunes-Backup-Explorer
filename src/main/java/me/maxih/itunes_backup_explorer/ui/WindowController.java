@@ -11,9 +11,8 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.input.*;
-import javafx.scene.layout.AnchorPane;
-import javafx.scene.layout.StackPane;
-import javafx.scene.layout.VBox;
+import javafx.scene.layout.*;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -22,6 +21,8 @@ import me.maxih.itunes_backup_explorer.api.BackupReadException;
 import me.maxih.itunes_backup_explorer.api.ITunesBackup;
 import me.maxih.itunes_backup_explorer.api.NotUnlockedException;
 import me.maxih.itunes_backup_explorer.api.UnsupportedCryptoException;
+import me.maxih.itunes_backup_explorer.util.DeviceInfo;
+import me.maxih.itunes_backup_explorer.util.DeviceService;
 import me.maxih.itunes_backup_explorer.util.FileSize;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +35,8 @@ import java.security.InvalidKeyException;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class WindowController {
     private static final Logger logger = LoggerFactory.getLogger(WindowController.class);
@@ -449,6 +452,271 @@ public class WindowController {
     }
 
     @FXML
+    public void createBackup() {
+        if (!DeviceService.isLibimobiledeviceAvailable()) {
+            Dialogs.showAlert(Alert.AlertType.ERROR, "libimobiledevice not found. Please install it to create backups.");
+            return;
+        }
+
+        Optional<String> device = DeviceService.detectDevice();
+        if (device.isEmpty()) {
+            Dialogs.showAlert(Alert.AlertType.ERROR, "No device connected. Please connect an iOS device and try again.");
+            return;
+        }
+
+        String udid = device.get();
+
+        long estimatedTotalBytes = 0;
+        Optional<DeviceInfo> deviceInfo = DeviceService.getDeviceInfo(udid);
+        if (deviceInfo.isPresent()) {
+            long capacity = deviceInfo.get().totalDataCapacity();
+            long available = deviceInfo.get().totalDataAvailable();
+            if (capacity > 0 && available >= 0) {
+                estimatedTotalBytes = capacity - available;
+            }
+        }
+
+        DirectoryChooser chooser = new DirectoryChooser();
+        chooser.setTitle("Select backup destination");
+        File destination = chooser.showDialog(tabPane.getScene().getWindow());
+        if (destination == null) return;
+
+        Stage progressStage = new Stage();
+        progressStage.initModality(Modality.APPLICATION_MODAL);
+        progressStage.initOwner(tabPane.getScene().getWindow());
+        progressStage.setTitle("Creating Backup...");
+        progressStage.getIcons().add(ITunesBackupExplorer.APP_ICON);
+        progressStage.setMinWidth(520);
+        progressStage.setMinHeight(400);
+
+        Label titleLabel = new Label("Backup in progress");
+        titleLabel.getStyleClass().add("section-title");
+
+        String deviceName = deviceInfo.map(DeviceInfo::deviceName).orElse(udid);
+        Label deviceLabel = new Label("Device: " + deviceName + "  (" + udid + ")");
+        deviceLabel.getStyleClass().add("info-label");
+
+        Label destLabel = new Label("Destination: " + destination.getAbsolutePath());
+        destLabel.getStyleClass().add("info-label");
+        destLabel.setWrapText(true);
+
+        Label statusLabel = new Label("Starting backup...");
+        statusLabel.setWrapText(true);
+        statusLabel.setMaxWidth(Double.MAX_VALUE);
+
+        Label percentLabel = new Label("0%");
+        percentLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+        percentLabel.setMinWidth(60);
+
+        ProgressBar progressBar = new ProgressBar(0);
+        progressBar.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(progressBar, Priority.ALWAYS);
+
+        HBox progressRow = new HBox(10, progressBar, percentLabel);
+        progressRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label filesLabel = new Label("Files received: 0");
+        filesLabel.getStyleClass().add("info-label");
+
+        Label transferredLabel = new Label("Transferred: 0 B" +
+                (estimatedTotalBytes > 0 ? " / ~" + formatSize(estimatedTotalBytes) : ""));
+        transferredLabel.getStyleClass().add("info-label");
+
+        Label speedLabel = new Label("Transfer speed: --");
+        speedLabel.getStyleClass().add("info-label");
+
+        Label etaLabel = new Label("Estimated time remaining: calculating...");
+        etaLabel.getStyleClass().add("info-label");
+
+        TextArea logArea = new TextArea();
+        logArea.setEditable(false);
+        logArea.setWrapText(true);
+        logArea.getStyleClass().add("mirror-setup-log");
+        logArea.setPrefHeight(200);
+        VBox.setVgrow(logArea, Priority.ALWAYS);
+
+        Button cancelButton = new Button("Cancel");
+
+        VBox layout = new VBox(10,
+                titleLabel,
+                deviceLabel,
+                destLabel,
+                new Separator(),
+                progressRow,
+                statusLabel,
+                filesLabel,
+                transferredLabel,
+                speedLabel,
+                etaLabel,
+                new Separator(),
+                logArea,
+                cancelButton
+        );
+        layout.setPadding(new Insets(16));
+        layout.setAlignment(Pos.TOP_LEFT);
+
+        Scene scene = new Scene(layout, 560, 520);
+        scene.getStylesheets().add(
+                ITunesBackupExplorer.class.getResource("stylesheet.css").toExternalForm());
+
+        Parent root = scene.getRoot();
+        String theme = "Light".equalsIgnoreCase(PreferencesController.getTheme()) ? "theme-light" : "theme-dark";
+        root.getStyleClass().add(theme);
+
+        progressStage.setScene(scene);
+
+        Pattern progressBarPattern = Pattern.compile("^\\[.*\\]\\s+\\d");
+        Pattern sizePattern = Pattern.compile("\\(([\\d.]+)\\s*(\\w+)/([\\d.]+)\\s*(\\w+)\\)");
+        int[] fileCount = {0};
+        long[] lastUiUpdate = {0};
+        long[] startTime = {System.currentTimeMillis()};
+        double[] accumulatedBytes = {0};
+        double[] prevFileTotal = {0};
+        double[] currentFileBytes = {0};
+        long finalEstimatedTotalBytes = estimatedTotalBytes;
+
+        javafx.concurrent.Task<DeviceService.BackupResult> task = new javafx.concurrent.Task<>() {
+            @Override
+            protected DeviceService.BackupResult call() {
+                return DeviceService.createBackup(udid, destination,
+                        line -> {
+                            String trimmed = line.trim();
+                            if (trimmed.isEmpty()) return;
+
+                            boolean isProgressLine = progressBarPattern.matcher(trimmed).find();
+
+                            if (!isProgressLine) {
+                                if (trimmed.startsWith("Receiving") || trimmed.startsWith("Received")) {
+                                    fileCount[0]++;
+                                }
+                                Platform.runLater(() -> {
+                                    logArea.appendText(trimmed + "\n");
+                                    filesLabel.setText("Files received: " + fileCount[0]);
+                                });
+                            }
+
+                            Matcher sm = sizePattern.matcher(trimmed);
+                            if (sm.find()) {
+                                long now = System.currentTimeMillis();
+
+                                double fileCurrent = toBytes(Double.parseDouble(sm.group(1)), sm.group(2));
+                                double fileTotal = toBytes(Double.parseDouble(sm.group(3)), sm.group(4));
+
+                                if (fileTotal != prevFileTotal[0] && prevFileTotal[0] > 0) {
+                                    accumulatedBytes[0] += prevFileTotal[0];
+                                }
+                                prevFileTotal[0] = fileTotal;
+                                currentFileBytes[0] = fileCurrent;
+
+                                if (now - lastUiUpdate[0] < 500) return;
+                                lastUiUpdate[0] = now;
+
+                                double totalTransferred = accumulatedBytes[0] + fileCurrent;
+                                long elapsed = now - startTime[0];
+
+                                String speedText = "Transfer speed: --";
+                                String etaText = "Estimated time remaining: calculating...";
+                                double overallPct = 0;
+
+                                if (elapsed > 3000 && totalTransferred > 0) {
+                                    double bytesPerSec = totalTransferred / (elapsed / 1000.0);
+                                    speedText = "Transfer speed: " + formatSpeed(bytesPerSec);
+
+                                    if (finalEstimatedTotalBytes > 0) {
+                                        overallPct = (totalTransferred / finalEstimatedTotalBytes) * 100.0;
+                                        if (overallPct > 100) overallPct = 99.9;
+                                        double remainingBytes = finalEstimatedTotalBytes - totalTransferred;
+                                        if (remainingBytes > 0) {
+                                            long remainingSec = (long) (remainingBytes / bytesPerSec);
+                                            etaText = "Estimated time remaining: ~" + formatDuration(remainingSec);
+                                        } else {
+                                            etaText = "Estimated time remaining: finishing...";
+                                        }
+                                    }
+                                }
+
+                                String transferredText = "Transferred: " + formatSize((long) totalTransferred) +
+                                        (finalEstimatedTotalBytes > 0 ? " / ~" + formatSize(finalEstimatedTotalBytes) : "");
+                                String statusText = "Current file: " + sm.group(1) + " " + sm.group(2) +
+                                        " / " + sm.group(3) + " " + sm.group(4);
+
+                                double pctFinal = overallPct;
+                                String speedFinal = speedText;
+                                String etaFinal = etaText;
+                                String transferredFinal = transferredText;
+
+                                Platform.runLater(() -> {
+                                    statusLabel.setText(statusText);
+                                    transferredLabel.setText(transferredFinal);
+                                    speedLabel.setText(speedFinal);
+                                    etaLabel.setText(etaFinal);
+                                    if (finalEstimatedTotalBytes > 0) {
+                                        progressBar.setProgress(pctFinal / 100.0);
+                                        percentLabel.setText(String.format("%.1f%%", pctFinal));
+                                    } else {
+                                        progressBar.setProgress(-1);
+                                        percentLabel.setText(formatSize((long) (accumulatedBytes[0] + fileCurrent)));
+                                    }
+                                });
+                            }
+                        },
+                        this::isCancelled);
+            }
+        };
+
+        cancelButton.setOnAction(e -> task.cancel());
+        progressStage.setOnCloseRequest(e -> task.cancel());
+
+        task.setOnSucceeded(event -> Platform.runLater(() -> {
+            DeviceService.BackupResult result = task.getValue();
+            switch (result) {
+                case SUCCESS -> {
+                    progressStage.close();
+                    PreferencesController.addBackupRoot(destination.getAbsolutePath());
+                    loadBackups();
+                    File backupDir = new File(destination, udid);
+                    backups.stream()
+                            .filter(b -> b.directory.equals(backupDir))
+                            .findFirst()
+                            .ifPresentOrElse(
+                                    this::selectBackup,
+                                    () -> openBackup(backupDir)
+                            );
+                }
+                case CANCELLED -> {
+                    progressStage.close();
+                    Dialogs.showAlert(Alert.AlertType.INFORMATION, "Backup cancelled.");
+                }
+                case FAILED -> {
+                    titleLabel.setText("Backup failed");
+                    statusLabel.setText("The backup process exited with an error. Check the log below for details.");
+                    progressBar.setProgress(0);
+                    percentLabel.setText("--");
+                    cancelButton.setText("Close");
+                    cancelButton.setOnAction(e -> progressStage.close());
+                }
+            }
+        }));
+
+        task.setOnFailed(event -> Platform.runLater(() -> {
+            titleLabel.setText("Backup failed");
+            String msg = task.getException() != null ? task.getException().getMessage() : "Unknown error";
+            statusLabel.setText("Error: " + msg);
+            logArea.appendText("\nERROR: " + msg + "\n");
+            progressBar.setProgress(0);
+            percentLabel.setText("--");
+            cancelButton.setText("Close");
+            cancelButton.setOnAction(e -> progressStage.close());
+        }));
+
+        Thread backupThread = new Thread(task);
+        backupThread.setDaemon(true);
+        backupThread.start();
+
+        progressStage.show();
+    }
+
+    @FXML
     public void reloadBackupsAction() {
         this.loadBackups();
     }
@@ -482,6 +750,40 @@ public class WindowController {
 
         ((Stage) dialogPane.getScene().getWindow()).getIcons().add(ITunesBackupExplorer.APP_ICON);
         about.showAndWait();
+    }
+
+    private static double toBytes(double value, String unit) {
+        return switch (unit.toUpperCase()) {
+            case "KB" -> value * 1024;
+            case "MB" -> value * 1024 * 1024;
+            case "GB" -> value * 1024 * 1024 * 1024;
+            case "TB" -> value * 1024 * 1024 * 1024 * 1024;
+            default -> value;
+        };
+    }
+
+    private static String formatSize(long bytes) {
+        if (bytes >= 1024L * 1024 * 1024) return String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024));
+        if (bytes >= 1024L * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024));
+        if (bytes >= 1024L) return String.format("%.1f KB", bytes / 1024.0);
+        return bytes + " B";
+    }
+
+    private static String formatSpeed(double bytesPerSec) {
+        if (bytesPerSec >= 1024 * 1024 * 1024) return String.format("%.1f GB/s", bytesPerSec / (1024 * 1024 * 1024));
+        if (bytesPerSec >= 1024 * 1024) return String.format("%.1f MB/s", bytesPerSec / (1024 * 1024));
+        if (bytesPerSec >= 1024) return String.format("%.1f KB/s", bytesPerSec / 1024);
+        return String.format("%.0f B/s", bytesPerSec);
+    }
+
+    private static String formatDuration(long totalSeconds) {
+        if (totalSeconds < 0) return "--";
+        long hours = totalSeconds / 3600;
+        long minutes = (totalSeconds % 3600) / 60;
+        long seconds = totalSeconds % 60;
+        if (hours > 0) return String.format("%dh %02dm %02ds", hours, minutes, seconds);
+        if (minutes > 0) return String.format("%dm %02ds", minutes, seconds);
+        return String.format("%ds", seconds);
     }
 
     private void updateStatusBar() {

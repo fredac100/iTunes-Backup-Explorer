@@ -4,12 +4,16 @@ import com.dd.plist.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public class DeviceService {
     private static final Logger logger = LoggerFactory.getLogger(DeviceService.class);
@@ -239,6 +243,39 @@ public class DeviceService {
         NSObject obj = dict.objectForKey(key);
         if (obj instanceof NSNumber nsNumber) return nsNumber.boolValue();
         return defaultValue;
+    }
+
+    public enum BackupResult { SUCCESS, CANCELLED, FAILED }
+
+    public static BackupResult createBackup(String udid, File destination,
+                                            Consumer<String> onProgressLine, Supplier<Boolean> isCancelled) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                    "idevicebackup2", "backup", "--udid", udid, destination.getAbsolutePath());
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (isCancelled.get()) {
+                        process.destroyForcibly();
+                        return BackupResult.CANCELLED;
+                    }
+                    onProgressLine.accept(line);
+                }
+            }
+
+            int exitCode = process.waitFor();
+            return exitCode == 0 ? BackupResult.SUCCESS : BackupResult.FAILED;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return BackupResult.FAILED;
+        } catch (Exception e) {
+            logger.warn("Failed to create backup: {}", e.getMessage());
+            return BackupResult.FAILED;
+        }
     }
 
     private DeviceService() {}
