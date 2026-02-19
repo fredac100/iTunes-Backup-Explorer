@@ -1,236 +1,279 @@
 # Changelog — iTunes Backup Explorer (Fork)
 
-Documentacao de todas as melhorias implementadas sobre o [projeto original](https://github.com/MaxiHuHe04/iTunes-Backup-Explorer) de [MaxiHuHe04](https://github.com/MaxiHuHe04).
+Documentation of all improvements implemented on top of the [original project](https://github.com/MaxiHuHe04/iTunes-Backup-Explorer) by [MaxiHuHe04](https://github.com/MaxiHuHe04).
 
-O projeto original oferecia navegacao basica de backups criptografados do iTunes. Este fork o transforma em um toolkit completo para iPhone, adicionando espelhamento de tela, galeria de midias, controle ao vivo do dispositivo, criacao de backups e uma interface moderna.
-
----
-
-## Resumo das mudancas
-
-| Area | O que era | O que virou |
-|------|-----------|-------------|
-| Interface | Tema claro basico, janela pequena | Tema dark profissional, 1200x700, barra de status, drag & drop, atalhos |
-| Midias | Sem suporte visual | Galeria com thumbnails reais, filtros, paginacao, preview, suporte HEIC/MOV |
-| Dispositivo | Sem comunicacao | Aba Device com info, bateria, armazenamento, apps, screenshot, controles |
-| Espelhamento | Inexistente | AirPlay wireless + USB com toque interativo, iOS 17+ |
-| Backup | So navegacao | Criacao de backup com progresso detalhado, ETA, velocidade |
-| Busca | Basica, com bugs | Full-text em todas as colunas, filtros rapidos, export em lote |
-| Apps | Listagem simples | Arvore de arquivos por app com export |
-| Seguranca | Vazamentos de recursos | Path traversal protection, zeragem de temps, char[] para senhas, try-with-resources |
-| Testes | Nenhum | 36 testes unitarios (JUnit 5) |
-| Ferramentas | Requer instalacao manual | Download automatico de Python, ffmpeg, ImageMagick no Windows |
+The original project provided basic navigation of encrypted iTunes backups. This fork transforms it into a complete iPhone toolkit, adding screen mirroring, media gallery, live device control, backup creation, and a modern interface.
 
 ---
 
-## Melhorias detalhadas
+## Summary of changes
 
-### 1. Redesign completo da interface
+| Area | Before | After |
+|------|--------|-------|
+| Interface | Basic light theme, small window | Professional dark theme, 1200x700, status bar, drag & drop, shortcuts |
+| Media | No visual support | Gallery with real thumbnails, filters, pagination, preview, HEIC/MOV support |
+| Device | No communication | Device tab with info, battery, storage, apps, screenshot, controls |
+| Mirroring | Non-existent | USB mirroring with interactive touch, iOS 17+ tunnel support |
+| Backup | Browse only | Backup creation with detailed progress, ETA, speed |
+| Search | Basic, buggy | Full-text across all columns, quick filters, batch export |
+| Apps | Simple listing | Expandable file tree per app with export |
+| Security | Resource leaks | Path traversal protection, temp zeroing, char[] for passwords, try-with-resources |
+| Tests | None | 36 unit tests (JUnit 5) |
+| Tools | Requires manual install | Automatic download of Python, ffmpeg, ImageMagick on Windows |
 
-- Tema dark profissional com CSS redesenhado (+1000 linhas de estilos)
-- Variantes light/dark selecionaveis nas preferencias
-- Janela principal ampliada de ~800x600 para 1200x700
-- Barra de status com total de arquivos, tamanho do backup e estado de criptografia
-- Tela de boas-vindas fullscreen com gradiente quando nenhum backup esta aberto
-- Drag & drop: arrastar pasta de backup direto na sidebar
-- Atalhos de teclado: `Ctrl+O` (abrir), `Ctrl+F` (busca), `Ctrl+Q` (sair), `F5` (recarregar)
-- Sidebar com ordenacao por data e context menu (abrir diretorio, fechar backup)
-- Substituicao de todos os `System.out.println` e `printStackTrace` por SLF4J
-- Formatacao de tamanhos de arquivo com utilitario `FileSize` (KB/MB/GB)
+---
+
+## Recent changes
+
+### ImageMagick portable download fix
+
+- Fixed ImageMagick download URL — GitHub releases now only distribute `.7z` archives instead of `.zip`
+- Added Apache Commons Compress and XZ dependencies for 7z extraction support
+- Changed download format from ZIP to 7z with proper extraction
+- Simplified Files tab by removing ImageMagick as a build-time dependency
+
+**Commits:** `75e4c9c`, `a9d7fdb`
+
+### Dialog theme consistency
+
+- Applied dark/light theme to all native dialogs and alerts (password prompt, confirmations, errors)
+- Dialogs now use the same stylesheet and theme class as the main window
+
+**Commits:** `6e2047e`
+
+### Device tab pymobiledevice3 fallback
+
+- Fixed Device tab not recognizing connected iPhone when libimobiledevice is unavailable
+- Both `initialize()` and `pollDevice()` now check for pymobiledevice3 as a fallback backend
+- App listing now works via pymobiledevice3 (`InstallationProxyService`) when `ideviceinstaller` is not available
+- App uninstall now works via pymobiledevice3 as a fallback
+
+**Commits:** `d946224`
+
+### Mirror/Screen mirroring Windows compatibility
+
+- Fixed tunnel startup on Windows — uses PowerShell `Start-Process -Verb RunAs` instead of `pkexec` for privilege elevation
+- Removed `--daemonize` flag on Windows (uses `os.fork()` which doesn't exist on Windows; `Start-Process` already detaches the process)
+- Fixed process termination on Windows — uses `taskkill /F /IM` instead of `pkill`
+- Adapted `mirror_stream.py` for Windows: TCP socket instead of pipe file descriptors, conditional `select` import, uxplay search in common install directories
+- Fixed `try_auto_mount` to find `pymobiledevice3.exe` on Windows (was looking for the Linux name without `.exe`)
+- **AirPlay mirroring temporarily disabled** on Windows due to incompatibility with Windows 11 Smart App Control (blocks unsigned uxplay-windows installer). USB mirroring works normally. AirPlay remains fully functional on Linux.
+
+**Commits:** `7e3545b`
+
+---
+
+## Detailed improvements
+
+### 1. Complete interface redesign
+
+- Professional dark theme with redesigned CSS (+1000 lines of styles)
+- Selectable light/dark variants in preferences
+- Main window enlarged from ~800x600 to 1200x700
+- Status bar with total files, backup size and encryption state
+- Fullscreen welcome screen with gradient when no backup is open
+- Drag & drop: drag backup folder directly onto the sidebar
+- Keyboard shortcuts: `Ctrl+O` (open), `Ctrl+F` (search), `Ctrl+Q` (quit), `F5` (reload)
+- Sidebar with date sorting and context menu (open directory, close backup)
+- Replaced all `System.out.println` and `printStackTrace` with SLF4J
+- File size formatting with `FileSize` utility (KB/MB/GB)
 
 **Commits:** `e4885d4`, `6553149`, `5bf4409`, `4c82032`
 
-### 2. Galeria de midias
+### 2. Media gallery
 
-Nova aba **Media** com navegacao visual de fotos e videos do backup:
+New **Media** tab with visual browsing of photos and videos from the backup:
 
-- Grid de thumbnails com carregamento assincrono (pool de 4 threads)
-- Cache LRU de thumbnails para navegacao fluida
-- Filtros: All / Photos / Videos
-- Paginacao com 100 itens por pagina
-- Painel de preview full-size com metadados
-- Suporte a HEIC/HEIF via ImageMagick (conversao para JPEG)
-- Suporte a thumbnails de video (MOV/MP4/M4V/AVI) via ffmpeg (extrai frame)
-- Export individual ou em lote
-- Formatos: JPG, PNG, HEIC, HEIF, GIF, BMP, TIFF, MOV, MP4, M4V, AVI
+- Thumbnail grid with async loading (4-thread pool)
+- LRU thumbnail cache for smooth navigation
+- Filters: All / Photos / Videos
+- Pagination with 100 items per page
+- Full-size preview panel with metadata
+- HEIC/HEIF support via ImageMagick (conversion to JPEG)
+- Video thumbnail support (MOV/MP4/M4V/AVI) via ffmpeg (frame extraction)
+- Individual or batch export
+- Formats: JPG, PNG, HEIC, HEIF, GIF, BMP, TIFF, MOV, MP4, M4V, AVI
 
 **Commits:** `e2873d0`, `eff5f8d`
 
-### 3. Controle ao vivo do dispositivo
+### 3. Live device control
 
-Nova aba **Device** para comunicacao USB com iPhone via libimobiledevice:
+New **Device** tab for USB communication with iPhone via libimobiledevice:
 
-- Deteccao automatica de iPhone conectado
-- Informacoes do dispositivo: modelo, iOS, serial, UDID, Wi-Fi MAC
-- Bateria: nivel e estado (carregando/descarregando)
-- Armazenamento: barra visual com usado/total
-- Apps instalados: listagem com filtro (User/System), busca e desinstalacao
-- Captura de tela (screenshot direto para arquivo)
-- Controles de energia: reiniciar, desligar, suspender
-- Fallback via pymobiledevice3 quando libimobiledevice nao esta disponivel
+- Automatic detection of connected iPhone
+- Device information: model, iOS, serial, UDID, Wi-Fi MAC
+- Battery: level and state (charging/discharging)
+- Storage: visual bar with used/total
+- Installed apps: listing with filter (User/System), search and uninstall
+- Screenshot capture (direct to file)
+- Power controls: restart, shutdown, suspend
+- Fallback via pymobiledevice3 when libimobiledevice is not available
 
 **Commits:** `c9b26c9`, `a7597ba`, `08002d1`
 
-### 4. Espelhamento de tela (Mirror)
+### 4. Screen mirroring (Mirror)
 
-Nova aba **Mirror** com dois modos de espelhamento:
+New **Mirror** tab with USB screen mirroring:
 
-**AirPlay (wireless):**
-- Streaming via AirPlay usando uxplay como servidor
-- Pipeline GStreamer com bifurcacao: jpegenc para frames + fakesink
-- Parsing SOI/EOI para extracao de frames JPEG do pipe
+**USB (direct):**
+- Capture via pymobiledevice3 with DvtSecureSocketProxyService
+- iOS 17+ with automatic tunnel via tunneld (TCP protocol)
+- iOS 16 and below with direct ScreenshotService
+- Windows support with PowerShell privilege elevation for tunnel
+- Fallback via DVT instruments
 
-**USB (direto):**
-- Captura via pymobiledevice3 com DvtSecureSocketProxyService
-- iOS 17+ com tunel automatico via tunneld (protocolo TCP)
-- iOS 26+ fallback via DVT instruments
+**AirPlay (wireless) — Linux only:**
+- Streaming via AirPlay using uxplay as a server
+- GStreamer pipeline with fork: jpegenc for frames + fakesink
+- SOI/EOI parsing for JPEG frame extraction from pipe
+- Windows support prepared (TCP socket approach) but temporarily disabled due to Smart App Control blocking unsigned installers
 
-**Comum:**
-- Toque interativo: tap e swipe encaminhados ao dispositivo via WDA HTTP
-- FPS configuravel (30 por padrao)
-- Modo view-only (sem envio de toques)
-- Timeout de 30s no estado CONNECTING com monitoramento do processo
-- Retry com 5 tentativas e cleanup de processos orfaos
-- Estilos para dark/light theme na toolbar e badges de estado
+**Common:**
+- Interactive touch: tap and swipe forwarded to device via WDA HTTP
+- Configurable FPS (30 by default)
+- View-only mode (no touch input)
+- 30s timeout in CONNECTING state with process monitoring
+- Retry with 5 attempts and orphan process cleanup
+- Dark/light theme styles for toolbar and state badges
 
-**Commits:** `56ef57f`, `9b45aa6`, `4cf793d`
+**Commits:** `56ef57f`, `9b45aa6`, `4cf793d`, `7e3545b`
 
-### 5. Criacao de backup
+### 5. Backup creation
 
-Novo botao **Create Backup** na tela inicial e no menu File:
+New **Create Backup** button on the welcome screen and in the File menu:
 
-- Detecta dispositivo via libimobiledevice ou pymobiledevice3
-- Consulta informacoes do dispositivo para estimar tamanho total
-- Janela de progresso detalhada:
-  - Barra de progresso com percentual
-  - Velocidade de transferencia em MB/s
-  - Tempo restante estimado (ETA)
-  - Bytes transferidos / total estimado
-  - Log em tempo real
-  - Marcos de progresso a cada 5%
-- Suporte a dois backends:
+- Detects device via libimobiledevice or pymobiledevice3
+- Queries device info to estimate total size
+- Detailed progress window:
+  - Progress bar with percentage
+  - Transfer speed in MB/s
+  - Estimated time remaining (ETA)
+  - Bytes transferred / estimated total
+  - Real-time log
+  - Progress milestones every 5%
+- Two backend support:
   - `idevicebackup2` (libimobiledevice)
   - `pymobiledevice3 backup2` (fallback)
-- Parser de progresso tqdm para pymobiledevice3 (leitura char a char para capturar `\r`)
-- Cancelamento com confirmacao e destruicao de toda a arvore de processos
-- Destino registrado automaticamente como backup root apos sucesso
+- tqdm progress parser for pymobiledevice3 (char-by-char reading to capture `\r`)
+- Cancellation with confirmation and full process tree destruction
+- Destination automatically registered as backup root after success
 
 **Commits:** `b2d1d44`, `eb26be2`, `2608fd7`, `3c581e1`, `85f09c9`, `73a4690`, `aac3909`, `57048da`, `42bb9a7`, `42b90ca`, `5082ebb`, `08002d1`, `917cf09`, `b18092a`, `991618b`, `45bcda9`
 
-### 6. Setup automatico de ferramentas (Windows)
+### 6. Automatic tool setup (Windows)
 
-**Python portatil:**
-- Quando Python nao esta no sistema, baixa automaticamente Python embeddable (~15 MB)
-- Extrai em `~/.config/itunes-backup-explorer/python-portable/`
-- Instala pip, setuptools, wheel e pymobiledevice3
-- Setup disparado automaticamente ao clicar Create Backup
-- Janela de progresso com log detalhado
+**Portable Python:**
+- When Python is not on the system, automatically downloads Python embeddable (~15 MB)
+- Extracts to `~/.config/itunes-backup-explorer/python-portable/`
+- Installs pip, setuptools, wheel and pymobiledevice3
+- Setup triggered automatically when clicking Create Backup
+- Progress window with detailed log
 
-**ffmpeg e ImageMagick portateis:**
-- Quando ausentes no Windows, oferece download automatico (~130 MB total)
-- ffmpeg: build GPL do BtbN/FFmpeg-Builds
-- ImageMagick: build portable Q16-HDRI
-- Armazenados em `~/.config/itunes-backup-explorer/ffmpeg-portable/` e `imagemagick-portable/`
-- Dialogo de confirmacao ao abrir primeiro backup (uma vez por sessao)
-- Ordem de deteccao: bundled no MSI > portatil no home > PATH do sistema
-- No Linux: usa ferramentas do sistema normalmente, sem download
+**Portable ffmpeg and ImageMagick:**
+- When missing on Windows, offers automatic download (~130 MB total)
+- ffmpeg: GPL build from BtbN/FFmpeg-Builds
+- ImageMagick: portable Q16-HDRI build (7z format)
+- Stored in `~/.config/itunes-backup-explorer/ffmpeg-portable/` and `imagemagick-portable/`
+- Confirmation dialog when opening first backup (once per session)
+- Detection order: bundled in MSI > portable in home > system PATH
+- On Linux: uses system tools normally, no download needed
 
-**Commits:** `473d040`, `8cec282`
+**Commits:** `473d040`, `8cec282`, `75e4c9c`, `a9d7fdb`, `6e2047e`
 
-### 7. Busca de arquivos melhorada
+### 7. Improved file search
 
-- Correcao de NPE que impedia a busca de funcionar
-- Busca full-text em todas as colunas (fileID, domain, relativePath)
-- Hint contextual explicando a sintaxe
-- Colunas proporcionais sem scrollbar horizontal
-- Filtros rapidos: Photos, Videos, WhatsApp, etc.
-- Export em lote dos resultados
+- Fixed NPE that prevented search from working
+- Full-text search across all columns (fileID, domain, relativePath)
+- Contextual hint explaining the syntax
+- Proportional columns without horizontal scrollbar
+- Quick filters: Photos, Videos, WhatsApp, etc.
+- Batch export of results
 
 **Commits:** `884663d`
 
 ### 8. Apps browser
 
-- Aba **Apps** com listagem de todos os apps do backup
-- Arvore de diretorios expandivel por app
-- Nome, bundle ID e versao de cada app
-- Export de dados individuais
-- Guard de backup locked para evitar erro ao acessar banco nao desbloqueado
+- **Apps** tab with listing of all apps from the backup
+- Expandable directory tree per app
+- Name, bundle ID and version for each app
+- Individual data export
+- Locked backup guard to prevent error when accessing unlocked database
 
 **Commits:** `4526f22`
 
-### 9. Preferencias expandidas
+### 9. Expanded preferences
 
-- Tema: Dark / Light
+- Theme: Dark / Light
 - Auto-select newest backup
-- Limites de busca configuraveis
-- Preservacao de timestamps na extracao
-- Criacao de estrutura de diretorios na extracao
-- Confirmacao de delete
-- Gerenciamento de backup roots com deteccao de sobreposicao (pai/filho)
-- Textos padronizados em ingles
+- Configurable search limits
+- Timestamp preservation on extraction
+- Directory structure creation on extraction
+- Delete confirmation
+- Backup roots management with overlap detection (parent/child)
+- Standardized English text
 
 **Commits:** `e2873d0`, `c520079`, `ff4d417`
 
-### 10. Seguranca e robustez
+### 10. Security and robustness
 
-- **Path traversal protection** na extracao de arquivos
-- **Try-with-resources** em todos os PreparedStatement/ResultSet (corrige leak)
-- **Byte overflow** corrigido na conversao de UID para indice no KeyBag
-- **char[]** para senhas em vez de String, com limpeza apos uso
-- **Zeragem de arquivo temporario** (banco decriptado) com `deleteOnExit`
-- **Null safety** em campos opcionais do BackupManifest e BackupInfo
-- **Acesso sincronizado** a conexao do banco de dados
-- **Validacao de bounds** no acesso a objetos do BackupFile
-- **Propagacao de excecoes** SQL em vez de engoli-las silenciosamente
-- **DateTimeFormatter** em vez de SimpleDateFormat (thread-safe)
-- **Locale.ROOT** em formatacao numerica para evitar virgula decimal
-- Dependencia dd-plist migrada de JitPack para Maven Central
+- **Path traversal protection** on file extraction
+- **Try-with-resources** on all PreparedStatement/ResultSet (fixes leak)
+- **Byte overflow** fixed in UID-to-index conversion in KeyBag
+- **char[]** for passwords instead of String, with cleanup after use
+- **Temp file zeroing** (decrypted database) with `deleteOnExit`
+- **Null safety** on optional fields of BackupManifest and BackupInfo
+- **Synchronized access** to database connection
+- **Bounds validation** on BackupFile object access
+- **Exception propagation** for SQL instead of silently swallowing
+- **DateTimeFormatter** instead of SimpleDateFormat (thread-safe)
+- **Locale.ROOT** in numeric formatting to avoid decimal comma
+- dd-plist dependency migrated from JitPack to Maven Central
 
 **Commits:** `8dec612`, `0f8fdd0`
 
-### 11. Testes
+### 11. Tests
 
-36 testes unitarios adicionados (JUnit 5):
+36 unit tests added (JUnit 5):
 
-- `KeyBagUidTest` — conversao de UID para indice
-- `BackupFilePaddingFixerTest` — deteccao/remocao de padding PKCS#7
-- `BackupPathUtilsTest` — manipulacao de paths
-- `FileSizeTest` — formatacao de tamanho legivel
+- `KeyBagUidTest` — UID-to-index conversion
+- `BackupFilePaddingFixerTest` — PKCS#7 padding detection/removal
+- `BackupPathUtilsTest` — path manipulation
+- `FileSizeTest` — human-readable size formatting
 
 **Commits:** `0f8fdd0`
 
-### 12. Scripts de conveniencia
+### 12. Convenience scripts
 
-- `compile.bat` / `compile.sh` — compila o fat JAR com um duplo-clique
-- `run.bat` / `run.sh` — compila (se necessario) e executa o app
-- `scripts/run-dev.sh` — execucao em modo desenvolvimento via Maven
-- Deteccao automatica do JAR sem versao hardcoded
+- `compile.bat` / `compile.sh` — compiles the fat JAR with a double-click
+- `run.bat` / `run.sh` — compiles (if needed) and runs the app
+- `scripts/run-dev.sh` — development mode execution via Maven
+- Automatic JAR detection without hardcoded version
 
 **Commits:** `28ec3c1`
 
 ---
 
-## Instrucoes para o usuario
+## User instructions
 
-### Pre-requisitos
+### Prerequisites
 
-| Requisito | Versao | Observacao |
-|-----------|--------|------------|
-| **Java (JDK)** | 18 ou superior | Necessario para compilar e rodar |
-| **Apache Maven** | 3.8+ | Necessario para compilar |
-| **Git** | qualquer | Para clonar o repositorio |
+| Requirement | Version | Notes |
+|-------------|---------|-------|
+| **Java (JDK)** | 18 or higher | Required to compile and run |
+| **Apache Maven** | 3.8+ | Required to compile |
+| **Git** | any | To clone the repository |
 
-> No Windows, instale o JDK (ex: [Adoptium](https://adoptium.net/)) e adicione ao PATH.
-> Maven pode ser instalado via [sdkman](https://sdkman.io/) ou [download direto](https://maven.apache.org/download.cgi).
+> On Windows, install the JDK (e.g., [Adoptium](https://adoptium.net/)) and add it to PATH.
+> Maven can be installed via [sdkman](https://sdkman.io/) or [direct download](https://maven.apache.org/download.cgi).
 
-### Instalacao rapida
+### Quick installation
 
 ```bash
 git clone https://github.com/fredac100/iTunes-Backup-Explorer.git
 cd iTunes-Backup-Explorer
 ```
 
-**Windows:** duplo-clique em `run.bat`
+**Windows:** double-click `run.bat`
 
 **Linux/macOS:**
 ```bash
@@ -238,118 +281,119 @@ chmod +x run.sh
 ./run.sh
 ```
 
-O script compila automaticamente na primeira execucao e abre o app.
+The script automatically compiles on the first run and opens the app.
 
-### Dependencias opcionais
+### Optional dependencies
 
-Essas ferramentas sao necessarias apenas para funcionalidades especificas. **No Windows, o app baixa automaticamente** quando necessario.
+These tools are only needed for specific features. **On Windows, the app downloads them automatically** when needed.
 
-| Ferramenta | Funcionalidade | Linux (apt) | Windows |
-|------------|---------------|-------------|---------|
-| libimobiledevice | Device tab, backup via USB | `sudo apt install libimobiledevice-utils` | Incluido no Apple Devices / iTunes |
-| pymobiledevice3 | Mirror tab, backup fallback | `pip install pymobiledevice3` | **Automatico** (baixa Python portatil se necessario) |
-| ffmpeg | Thumbnails de video | `sudo apt install ffmpeg` | **Automatico** (baixa na primeira necessidade) |
-| ImageMagick | Thumbnails de HEIC | `sudo apt install imagemagick libheif1` | **Automatico** (baixa na primeira necessidade) |
-| uxplay | AirPlay wireless | `sudo apt install uxplay` | Nao disponivel |
+| Tool | Feature | Linux (apt) | Windows |
+|------|---------|-------------|---------|
+| libimobiledevice | Device tab, USB backup | `sudo apt install libimobiledevice-utils` | Included in Apple Devices / iTunes |
+| pymobiledevice3 | Mirror tab, backup fallback | `pip install pymobiledevice3` | **Automatic** (downloads portable Python if needed) |
+| ffmpeg | Video thumbnails | `sudo apt install ffmpeg` | **Automatic** (downloads on first need) |
+| ImageMagick | HEIC thumbnails | `sudo apt install imagemagick libheif1` | **Automatic** (downloads on first need) |
+| uxplay | AirPlay wireless | `sudo apt install uxplay` | Not available (temporarily disabled) |
 
-### Como usar
+### How to use
 
-#### Navegar backups
+#### Browse backups
 
-1. Abra o app — backups do iTunes/Finder sao detectados automaticamente
-2. Se o backup esta criptografado, digite a senha quando solicitado
-3. Navegue pelas abas: **Info**, **Files**, **Media**, **Apps**, **Search**
-4. Para abrir um backup de outro local: `Ctrl+O` ou arraste a pasta na sidebar
+1. Open the app — iTunes/Finder backups are detected automatically
+2. If the backup is encrypted, enter the password when prompted
+3. Browse the tabs: **Info**, **Files**, **Media**, **Apps**, **Search**
+4. To open a backup from another location: `Ctrl+O` or drag the folder onto the sidebar
 
-#### Criar backup do iPhone
+#### Create iPhone backup
 
-1. Conecte o iPhone via USB e toque "Confiar" no dispositivo
-2. Clique em **Create Backup** na tela inicial
-3. Escolha o destino
-4. Acompanhe o progresso — cancelavel a qualquer momento
+1. Connect the iPhone via USB and tap "Trust" on the device
+2. Click **Create Backup** on the welcome screen
+3. Choose the destination
+4. Follow the progress — cancellable at any time
 
-> No Windows, se nenhuma ferramenta de comunicacao estiver instalada, o app oferece instalar automaticamente.
+> On Windows, if no communication tool is installed, the app offers to install automatically.
 
-#### Galeria de midias
+#### Media gallery
 
-1. Abra um backup e desbloqueie se necessario
-2. Va para a aba **Media**
-3. Use os filtros (All / Photos / Videos) e a paginacao
-4. Clique em uma thumbnail para preview, duplo-clique para abrir o arquivo
-5. Use **Export** para salvar arquivos individuais ou em lote
+1. Open a backup and unlock if needed
+2. Go to the **Media** tab
+3. Use filters (All / Photos / Videos) and pagination
+4. Click a thumbnail for preview, double-click to open the file
+5. Use **Export** to save individual files or in batch
 
-> No Windows, se thumbnails nao aparecem para videos ou HEIC, o app oferece baixar ffmpeg e ImageMagick automaticamente.
+> On Windows, if thumbnails don't appear for videos or HEIC, the app offers to download ffmpeg and ImageMagick automatically.
 
-#### Espelhamento de tela
+#### Screen mirroring
 
-1. Va para a aba **Mirror**
-2. Escolha **USB** (cabo) ou **AirPlay** (wireless)
-3. Para USB: conecte o iPhone, o app detecta e inicia o stream
-4. Para AirPlay: inicie a transmissao pelo Central de Controle do iPhone
+1. Go to the **Mirror** tab
+2. Connect the iPhone via USB — the app detects it and starts the stream
+3. On iOS 17+, the app will request admin privileges to start the tunnel service
 
-#### Controle do dispositivo
+> AirPlay wireless mirroring is currently available on Linux only. On Windows, it is temporarily disabled due to Smart App Control compatibility issues.
 
-1. Conecte o iPhone via USB
-2. Va para a aba **Device**
-3. Veja info, bateria, armazenamento e apps instalados
-4. Use os botoes para screenshot, reiniciar, desligar ou suspender
+#### Device control
 
-### Compilacao avancada
+1. Connect the iPhone via USB
+2. Go to the **Device** tab
+3. View info, battery, storage and installed apps
+4. Use the buttons for screenshot, restart, shutdown or suspend
+
+### Advanced compilation
 
 ```bash
-# Fat JAR (todas as plataformas)
+# Fat JAR (all platforms)
 mvn clean compile assembly:single
 
-# Installer nativo (MSI no Windows, DEB no Linux)
+# Native installer (MSI on Windows, DEB on Linux)
 mvn clean package
 
-# Fat JAR multi-plataforma (Windows + Linux + ARM macOS)
+# Multi-platform fat JAR (Windows + Linux + ARM macOS)
 mvn clean compile assembly:single -Pmost_platforms
 ```
 
-### Estrutura de diretorios do usuario
+### User directory structure
 
-O app armazena dados em `~/.config/itunes-backup-explorer/`:
+The app stores data in `~/.config/itunes-backup-explorer/`:
 
 ```
 ~/.config/itunes-backup-explorer/
     python-portable/          # Python embeddable (Windows, ~50 MB)
-    python-venv/              # Virtualenv com pymobiledevice3 (Linux)
-    ffmpeg-portable/          # ffmpeg portatil (Windows, ~85 MB)
-    imagemagick-portable/     # ImageMagick portatil (Windows, ~50 MB)
+    python-venv/              # Virtualenv with pymobiledevice3 (Linux)
+    ffmpeg-portable/          # Portable ffmpeg (Windows, ~85 MB)
+    imagemagick-portable/     # Portable ImageMagick (Windows, ~50 MB)
 ```
 
-Preferencias do usuario sao armazenadas via `java.util.prefs.Preferences` (registro do Windows ou `~/.java` no Linux).
+User preferences are stored via `java.util.prefs.Preferences` (Windows registry or `~/.java` on Linux).
 
 ---
 
-## Arquitetura
+## Architecture
 
 ```
 me.maxih.itunes_backup_explorer/
-    api/            Dominio e logica de backup (ITunesBackup, KeyBag, BackupFile)
-    ui/             Controllers JavaFX (Window, Files, Media, Apps, Device, Mirror, Search, Preferences)
-    util/           Utilitarios (DeviceService, MirrorService, MediaConverter, FileSize)
+    api/            Domain and backup logic (ITunesBackup, KeyBag, BackupFile)
+    ui/             JavaFX controllers (Window, Files, Media, Apps, Device, Mirror, Search, Preferences)
+    util/           Utilities (DeviceService, MirrorService, MediaConverter, FileSize)
 ```
 
-### Dependencias externas em runtime
+### External runtime dependencies
 
-| Componente | Tecnologia |
-|------------|-----------|
-| Linguagem | Java 18+ |
+| Component | Technology |
+|-----------|-----------|
+| Language | Java 18+ |
 | GUI | JavaFX 23 (FXML + controllers) |
 | Build | Apache Maven |
-| Criptografia | Bouncy Castle 1.80 (AES-256, PBKDF2, AES-Wrap) |
-| Banco de dados | SQLite (Xerial sqlite-jdbc 3.49) |
+| Encryption | Bouncy Castle 1.80 (AES-256, PBKDF2, AES-Wrap) |
+| Database | SQLite (Xerial sqlite-jdbc 3.49) |
 | Plist | dd-plist |
-| Espelhamento | pymobiledevice3 (Python) |
-| Dispositivo | libimobiledevice (CLI) |
+| Mirroring | pymobiledevice3 (Python) |
+| Device | libimobiledevice (CLI) |
 | Video thumbnails | ffmpeg |
 | HEIC thumbnails | ImageMagick |
-| Testes | JUnit Jupiter 5 |
+| Tests | JUnit Jupiter 5 |
 
 ---
 
-## Origem do projeto
+## Project origin
 
-Este projeto e um fork do [iTunes Backup Explorer](https://github.com/MaxiHuHe04/iTunes-Backup-Explorer) original de [MaxiHuHe04](https://github.com/MaxiHuHe04). O projeto original fornecia a base para navegacao de backups criptografados do iTunes com suporte a AES-256 e KeyBag da Apple. Este fork estende significativamente o projeto com espelhamento de tela, galeria de midias, controle ao vivo do dispositivo, criacao de backups, setup automatico de ferramentas e uma interface moderna redesenhada.
+This project is a fork of the original [iTunes Backup Explorer](https://github.com/MaxiHuHe04/iTunes-Backup-Explorer) by [MaxiHuHe04](https://github.com/MaxiHuHe04). The original project provided the foundation for navigating encrypted iTunes backups with AES-256 and Apple KeyBag support. This fork significantly extends the project with screen mirroring, media gallery, live device control, backup creation, automatic tool setup, and a completely redesigned modern interface.
