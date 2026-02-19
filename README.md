@@ -188,6 +188,23 @@ The app works fully for backup browsing, media gallery, and file management with
 
 **Requirements:** JDK 18+ and Apache Maven.
 
+**Windows:**
+```
+compile.bat
+run.bat
+```
+
+**Linux/macOS:**
+```bash
+./compile.sh
+./run.sh
+```
+
+`compile` builds the fat JAR. `run` compiles (if needed) and launches the app.
+
+<details>
+<summary>Advanced Maven commands</summary>
+
 ```bash
 # Native executable + installer
 mvn clean package
@@ -201,6 +218,7 @@ mvn clean compile assembly:single -Pmost_platforms
 # Run directly (development)
 mvn exec:exec
 ```
+</details>
 
 ---
 

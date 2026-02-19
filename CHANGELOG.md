@@ -25,6 +25,14 @@ The original project provided basic navigation of encrypted iTunes backups. This
 
 ## Recent changes
 
+### PR review adjustments
+
+- Fixed Media tab gallery resize — FlowPane now recalculates columns when the window or SplitPane divider is resized
+- Translated all 40 Portuguese strings in `mirror_stream.py` to English
+- Restored "Hide symlinks and empty folders" checkbox in the Files tab with functional filter
+
+**Commits:** `4e7e5ef`
+
 ### USB mirror FPS optimization
 
 - Moved frame processing (`optimize_frame`) from the sequential consumer into parallel capture workers — each worker now captures, resizes, and encodes independently
@@ -368,7 +376,24 @@ These tools are only needed for specific features. **On Windows, the app downloa
 
 > If libimobiledevice is not available, the app automatically falls back to pymobiledevice3 for device detection, info, app listing, and uninstall.
 
-### Advanced compilation
+### Compiling and running
+
+**Windows:**
+```
+compile.bat
+run.bat
+```
+
+**Linux/macOS:**
+```bash
+./compile.sh
+./run.sh
+```
+
+`compile` builds the fat JAR. `run` compiles (if needed) and launches the app.
+
+<details>
+<summary>Advanced Maven commands</summary>
 
 ```bash
 # Fat JAR (all platforms)
@@ -380,6 +405,7 @@ mvn clean package
 # Multi-platform fat JAR (Windows + Linux + ARM macOS)
 mvn clean compile assembly:single -Pmost_platforms
 ```
+</details>
 
 ### User directory structure
 
