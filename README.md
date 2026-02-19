@@ -50,6 +50,24 @@ run.bat
 
 > Requires **JDK 18+** and **Apache Maven**.
 
+<details>
+<summary>Advanced Maven commands</summary>
+
+```bash
+# Native executable + installer
+mvn clean package
+
+# Fat JAR (cross-platform)
+mvn clean compile assembly:single
+
+# Multi-platform JAR (Windows + Linux + ARM macOS)
+mvn clean compile assembly:single -Pmost_platforms
+
+# Run directly (development)
+mvn exec:exec
+```
+</details>
+
 | What you get | How it works |
 |---|---|
 | **USB screen mirroring** | See your iPhone screen in real time via USB with interactive touch |
@@ -164,27 +182,6 @@ run.bat
 
 ## Installation
 
-### Quick start
-
-```bash
-git clone https://github.com/fredac100/iTunes-Backup-Explorer.git
-cd iTunes-Backup-Explorer
-```
-
-**Windows:**
-```
-compile.bat
-run.bat
-```
-
-**Linux/macOS:**
-```bash
-./compile.sh
-./run.sh
-```
-
-`compile` builds the fat JAR (required on first run). `run` launches the app.
-
 ### Optional Dependencies
 
 These tools are only needed for specific features. **On Windows, the app downloads them automatically** when needed.
@@ -200,44 +197,6 @@ These tools are only needed for specific features. **On Windows, the app downloa
 The app works fully for backup browsing, media gallery, and file management without these dependencies.
 
 > **Note on Windows auto-setup:** When a tool is missing, the app offers to download and set it up automatically. Portable tools are stored in `~/.config/itunes-backup-explorer/` and don't require admin privileges or system-wide installation.
-
----
-
-## Building from Source
-
-**Requirements:** JDK 18+ and Apache Maven.
-
-**Windows:**
-```
-compile.bat
-run.bat
-```
-
-**Linux/macOS:**
-```bash
-./compile.sh
-./run.sh
-```
-
-`compile` builds the fat JAR. `run` compiles (if needed) and launches the app.
-
-<details>
-<summary>Advanced Maven commands</summary>
-
-```bash
-# Native executable + installer
-mvn clean package
-
-# Fat JAR (cross-platform)
-mvn clean compile assembly:single
-
-# Multi-platform JAR (Windows + Linux + ARM macOS)
-mvn clean compile assembly:single -Pmost_platforms
-
-# Run directly (development)
-mvn exec:exec
-```
-</details>
 
 ---
 
