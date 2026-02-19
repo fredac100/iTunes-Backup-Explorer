@@ -24,6 +24,7 @@ import me.maxih.itunes_backup_explorer.api.UnsupportedCryptoException;
 import me.maxih.itunes_backup_explorer.util.DeviceInfo;
 import me.maxih.itunes_backup_explorer.util.DeviceService;
 import me.maxih.itunes_backup_explorer.util.FileSize;
+import me.maxih.itunes_backup_explorer.util.MediaConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,6 +48,7 @@ public class WindowController {
     final Map<ITunesBackup, ToggleButton> sidebarButtons = new HashMap<>();
 
     List<Node> lockedTabPages = new ArrayList<>();
+    private boolean mediaToolsSetupOffered;
 
     @FXML
     VBox backupSidebarBox;
@@ -376,6 +378,11 @@ public class WindowController {
         } else if (selectedTabPage == this.fileSearchTabPage) {
             this.fileSearchTabPageController.tabShown(backup);
         }
+
+        if (!mediaToolsSetupOffered && MediaConverter.isMediaToolsNeeded()) {
+            mediaToolsSetupOffered = true;
+            Platform.runLater(this::offerMediaToolsSetup);
+        }
     }
 
     private void showWelcome() {
@@ -507,6 +514,92 @@ public class WindowController {
                         startBackupFlow();
                     } else {
                         Dialogs.showAlert(Alert.AlertType.ERROR, "Setup completed but pymobiledevice3 was not detected. Check the log for errors.");
+                    }
+                },
+                error -> {
+                    progressBar.setProgress(0);
+                    titleLabel.setText("Setup failed");
+                    logArea.appendText("\nERROR: " + error + "\n");
+                    closeButton.setText("Close");
+                }
+        );
+    }
+
+    private void offerMediaToolsSetup() {
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Media Tools");
+        confirm.setHeaderText("Download media tools?");
+        confirm.setContentText(
+                "To display thumbnails for videos and HEIC photos, the app needs to download " +
+                "ffmpeg and ImageMagick (~130 MB total).\n\nDownload now?");
+
+        DialogPane dp = confirm.getDialogPane();
+        dp.getStylesheets().add(
+                ITunesBackupExplorer.class.getResource("stylesheet.css").toExternalForm());
+        String theme = "Light".equalsIgnoreCase(PreferencesController.getTheme()) ? "theme-light" : "theme-dark";
+        dp.getStyleClass().add(theme);
+        ((Stage) dp.getScene().getWindow()).getIcons().add(ITunesBackupExplorer.APP_ICON);
+
+        confirm.showAndWait().ifPresent(response -> {
+            if (response == ButtonType.OK) {
+                showMediaToolsSetup();
+            }
+        });
+    }
+
+    private void showMediaToolsSetup() {
+        Stage setupStage = new Stage();
+        setupStage.initModality(Modality.APPLICATION_MODAL);
+        setupStage.initOwner(tabPane.getScene().getWindow());
+        setupStage.setTitle("Setting up...");
+        setupStage.getIcons().add(ITunesBackupExplorer.APP_ICON);
+
+        Label titleLabel = new Label("Downloading media tools");
+        titleLabel.getStyleClass().add("section-title");
+
+        Label descLabel = new Label("Downloading ffmpeg and ImageMagick for video and HEIC thumbnail support.\nThis is a one-time setup.");
+        descLabel.setWrapText(true);
+
+        ProgressBar progressBar = new ProgressBar(-1);
+        progressBar.setMaxWidth(Double.MAX_VALUE);
+
+        TextArea logArea = new TextArea();
+        logArea.setEditable(false);
+        logArea.setWrapText(true);
+        logArea.getStyleClass().add("mirror-setup-log");
+        logArea.setPrefHeight(250);
+        VBox.setVgrow(logArea, Priority.ALWAYS);
+
+        Button closeButton = new Button("Cancel");
+        closeButton.setOnAction(e -> setupStage.close());
+
+        VBox layout = new VBox(10, titleLabel, descLabel, progressBar, logArea, closeButton);
+        layout.setPadding(new Insets(16));
+        layout.setAlignment(Pos.TOP_LEFT);
+
+        Scene scene = new Scene(layout, 520, 400);
+        scene.getStylesheets().add(
+                ITunesBackupExplorer.class.getResource("stylesheet.css").toExternalForm());
+
+        Parent root = scene.getRoot();
+        String theme = "Light".equalsIgnoreCase(PreferencesController.getTheme()) ? "theme-light" : "theme-dark";
+        root.getStyleClass().add(theme);
+
+        setupStage.setScene(scene);
+        setupStage.show();
+
+        MediaConverter.setupMediaTools(
+                line -> logArea.appendText(line + "\n"),
+                () -> {
+                    setupStage.close();
+                    if (MediaConverter.isFfmpegAvailable() && MediaConverter.isImageMagickAvailable()) {
+                        Dialogs.showAlert(Alert.AlertType.INFORMATION, "Media tools installed successfully. Video and HEIC thumbnails are now available.");
+                    } else if (MediaConverter.isFfmpegAvailable() || MediaConverter.isImageMagickAvailable()) {
+                        Dialogs.showAlert(Alert.AlertType.WARNING,
+                                "Some media tools could not be installed. Thumbnails may not work for all formats.");
+                    } else {
+                        Dialogs.showAlert(Alert.AlertType.ERROR,
+                                "Media tools could not be installed. Check the log for errors.");
                     }
                 },
                 error -> {

@@ -6,8 +6,11 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 public class MediaConverter {
     private static final Logger logger = LoggerFactory.getLogger(MediaConverter.class);
@@ -15,36 +18,160 @@ public class MediaConverter {
     private static final Set<String> HEIF_EXTENSIONS = Set.of("heic", "heif");
     private static final Set<String> VIDEO_EXTENSIONS = Set.of("mov", "mp4", "m4v", "avi");
 
+    private static final Path CONFIG_DIR = Path.of(System.getProperty("user.home"),
+            ".config", "itunes-backup-explorer");
+    private static final Path PORTABLE_FFMPEG_DIR = CONFIG_DIR.resolve("ffmpeg-portable");
+    private static final Path PORTABLE_IMAGEMAGICK_DIR = CONFIG_DIR.resolve("imagemagick-portable");
+
+    private static final String FFMPEG_DOWNLOAD_URL =
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip";
+    private static final String IMAGEMAGICK_DOWNLOAD_URL =
+            "https://imagemagick.org/archive/binaries/ImageMagick-7.1.1-43-portable-Q16-HDRI-x64.zip";
+
     private static Boolean ffmpegAvailable;
     private static Boolean imageMagickAvailable;
-    private static String imageMagickCommand;
+    private static String effectiveFfmpegPath;
+    private static String effectiveImageMagickPath;
 
     public static boolean isFfmpegAvailable() {
         if (ffmpegAvailable == null) {
-            ffmpegAvailable = testCommand("ffmpeg", "-version");
-            logger.info(ffmpegAvailable
-                    ? "ffmpeg detected - video thumbnails enabled"
-                    : "ffmpeg not found - videos will use placeholders");
+            effectiveFfmpegPath = resolveFfmpeg();
+            ffmpegAvailable = effectiveFfmpegPath != null;
+            if (ffmpegAvailable) {
+                logger.info("ffmpeg detected at {} - video thumbnails enabled", effectiveFfmpegPath);
+            } else {
+                logger.info("ffmpeg not found - videos will use placeholders");
+            }
         }
         return ffmpegAvailable;
     }
 
     public static boolean isImageMagickAvailable() {
         if (imageMagickAvailable == null) {
-            if (testCommand("magick", "-version")) {
-                imageMagickAvailable = true;
-                imageMagickCommand = "magick";
-            } else if (testCommand("convert", "-version")) {
-                imageMagickAvailable = true;
-                imageMagickCommand = "convert";
+            effectiveImageMagickPath = resolveImageMagick();
+            imageMagickAvailable = effectiveImageMagickPath != null;
+            if (imageMagickAvailable) {
+                logger.info("ImageMagick detected at {} - HEIC support enabled", effectiveImageMagickPath);
             } else {
-                imageMagickAvailable = false;
+                logger.info("ImageMagick not found - HEIC will use placeholders");
             }
-            logger.info(imageMagickAvailable
-                    ? "ImageMagick detected (" + imageMagickCommand + ") - HEIC support enabled"
-                    : "ImageMagick not found - HEIC will use placeholders");
         }
         return imageMagickAvailable;
+    }
+
+    private static String resolveFfmpeg() {
+        if (DeviceService.IS_WINDOWS) {
+            Path bundled = getBundledMediaToolsDir();
+            if (bundled != null) {
+                Path found = findExecutable(bundled.resolve("ffmpeg-portable"), "ffmpeg.exe");
+                if (found != null) return found.toString();
+            }
+            Path portable = findExecutable(PORTABLE_FFMPEG_DIR, "ffmpeg.exe");
+            if (portable != null) return portable.toString();
+        }
+        if (testCommand("ffmpeg", "-version")) return "ffmpeg";
+        return null;
+    }
+
+    private static String resolveImageMagick() {
+        if (DeviceService.IS_WINDOWS) {
+            Path bundled = getBundledMediaToolsDir();
+            if (bundled != null) {
+                Path found = findExecutable(bundled.resolve("imagemagick-portable"), "magick.exe");
+                if (found != null) return found.toString();
+            }
+            Path portable = findExecutable(PORTABLE_IMAGEMAGICK_DIR, "magick.exe");
+            if (portable != null) return portable.toString();
+        }
+        if (testCommand("magick", "-version")) return "magick";
+        if (testCommand("convert", "-version")) return "convert";
+        return null;
+    }
+
+    private static Path getBundledMediaToolsDir() {
+        try {
+            Path codePath = Path.of(MediaConverter.class.getProtectionDomain()
+                    .getCodeSource().getLocation().toURI());
+            return codePath.getParent().resolve("media-tools");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static Path findExecutable(Path dir, String execName) {
+        if (dir == null || !Files.isDirectory(dir)) return null;
+        try (Stream<Path> walk = Files.walk(dir, 5)) {
+            return walk.filter(Files::isRegularFile)
+                    .filter(p -> p.getFileName().toString().equalsIgnoreCase(execName))
+                    .findFirst()
+                    .orElse(null);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    public static boolean isMediaToolsNeeded() {
+        return DeviceService.IS_WINDOWS && (!isFfmpegAvailable() || !isImageMagickAvailable());
+    }
+
+    public static void resetDetection() {
+        ffmpegAvailable = null;
+        imageMagickAvailable = null;
+        effectiveFfmpegPath = null;
+        effectiveImageMagickPath = null;
+    }
+
+    public static void setupMediaTools(Consumer<String> onProgressLine,
+                                        Runnable onDone, Consumer<String> onError) {
+        Thread setupThread = new Thread(() -> {
+            try {
+                boolean needFfmpeg = !isFfmpegAvailable();
+                boolean needImageMagick = !isImageMagickAvailable();
+
+                if (needFfmpeg) setupFfmpeg(onProgressLine);
+                if (needImageMagick) setupImageMagick(onProgressLine);
+
+                resetDetection();
+                javafx.application.Platform.runLater(onDone);
+            } catch (Exception e) {
+                javafx.application.Platform.runLater(() -> onError.accept(e.getMessage()));
+            }
+        });
+        setupThread.setName("media-tools-setup");
+        setupThread.setDaemon(true);
+        setupThread.start();
+    }
+
+    private static void setupFfmpeg(Consumer<String> log) throws IOException {
+        Files.createDirectories(PORTABLE_FFMPEG_DIR);
+        Path zipFile = PORTABLE_FFMPEG_DIR.resolve("ffmpeg.zip");
+        try {
+            emitLog(log, "Downloading ffmpeg (~85 MB)...");
+            DeviceService.downloadFile(FFMPEG_DOWNLOAD_URL, zipFile, log);
+            emitLog(log, "Extracting ffmpeg...");
+            DeviceService.extractZip(zipFile, PORTABLE_FFMPEG_DIR);
+        } finally {
+            Files.deleteIfExists(zipFile);
+        }
+        emitLog(log, "ffmpeg installed successfully.");
+    }
+
+    private static void setupImageMagick(Consumer<String> log) throws IOException {
+        Files.createDirectories(PORTABLE_IMAGEMAGICK_DIR);
+        Path zipFile = PORTABLE_IMAGEMAGICK_DIR.resolve("imagemagick.zip");
+        try {
+            emitLog(log, "Downloading ImageMagick (~50 MB)...");
+            DeviceService.downloadFile(IMAGEMAGICK_DOWNLOAD_URL, zipFile, log);
+            emitLog(log, "Extracting ImageMagick...");
+            DeviceService.extractZip(zipFile, PORTABLE_IMAGEMAGICK_DIR);
+        } finally {
+            Files.deleteIfExists(zipFile);
+        }
+        emitLog(log, "ImageMagick installed successfully.");
+    }
+
+    private static void emitLog(Consumer<String> log, String message) {
+        javafx.application.Platform.runLater(() -> log.accept(message));
     }
 
     private static boolean testCommand(String... command) {
@@ -90,7 +217,7 @@ public class MediaConverter {
 
         try {
             ProcessBuilder pb = new ProcessBuilder(
-                    imageMagickCommand,
+                    effectiveImageMagickPath,
                     source.getAbsolutePath(),
                     "-resize", maxSize + "x" + maxSize + ">",
                     "-quality", "90",
@@ -133,7 +260,7 @@ public class MediaConverter {
         try {
             String scale = "scale='min(" + maxSize + ",iw)':'min(" + maxSize + ",ih)':force_original_aspect_ratio=decrease";
             ProcessBuilder pb = new ProcessBuilder(
-                    "ffmpeg", "-y",
+                    effectiveFfmpegPath, "-y",
                     "-i", source.getAbsolutePath(),
                     "-ss", "00:00:00.5",
                     "-frames:v", "1",

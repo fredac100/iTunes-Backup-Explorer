@@ -568,7 +568,7 @@ public class DeviceService {
         }
     }
 
-    private static void downloadFile(String urlStr, Path destination, Consumer<String> log) throws IOException {
+    static void downloadFile(String urlStr, Path destination, Consumer<String> log) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
         conn.setConnectTimeout(30_000);
         conn.setReadTimeout(60_000);
@@ -606,7 +606,7 @@ public class DeviceService {
         }
     }
 
-    private static void extractZip(Path zipFile, Path targetDir) throws IOException {
+    static void extractZip(Path zipFile, Path targetDir) throws IOException {
         try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(zipFile))) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
