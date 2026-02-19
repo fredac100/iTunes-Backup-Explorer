@@ -9,6 +9,7 @@
         <TextField fx:id="fileFilterField" prefWidth="200.0" promptText="Filter by path or filename" HBox.hgrow="SOMETIMES"/>
         <Label text="Sort" styleClass="info-label"/>
         <ComboBox fx:id="sortComboBox" prefWidth="160.0"/>
+        <CheckBox fx:id="filesOnlyFilterCheckBox" text="Hide symlinks and empty folders"/>
         <Button fx:id="expandAllButton" text="Expand all" onAction="#expandAllFiles"/>
         <Button fx:id="collapseAllButton" text="Collapse all" onAction="#collapseAllFiles"/>
     </HBox>

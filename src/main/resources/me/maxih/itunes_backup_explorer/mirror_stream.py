@@ -259,7 +259,7 @@ def _read_airplay_frames_fd(proc: subprocess.Popen, r_fd: int,
             ready, _, _ = select.select([r_fd], [], [], timeout)
             if not ready:
                 if frame_count == 0:
-                    print(f"INFO: Timeout de {connect_timeout}s aguardando conexão AirPlay",
+                    print(f"INFO: Timeout of {connect_timeout}s waiting for AirPlay connection",
                           file=sys.stderr, flush=True)
                 break
 
@@ -296,7 +296,7 @@ def _read_airplay_frames_fd(proc: subprocess.Popen, r_fd: int,
         pass
 
     if frame_count == 0 and uxplay_error:
-        print(f"INFO: uxplay reportou erros: {'; '.join(uxplay_error)}", file=sys.stderr, flush=True)
+        print(f"INFO: uxplay reported errors: {'; '.join(uxplay_error)}", file=sys.stderr, flush=True)
 
     return frame_count
 
@@ -335,7 +335,7 @@ def _read_airplay_frames_socket(proc: subprocess.Popen, conn: _socket.socket,
                 chunk = conn.recv(131072)
             except _socket.timeout:
                 if frame_count == 0:
-                    print(f"INFO: Timeout de {connect_timeout}s aguardando conexão AirPlay",
+                    print(f"INFO: Timeout of {connect_timeout}s waiting for AirPlay connection",
                           file=sys.stderr, flush=True)
                 break
             except OSError:
@@ -369,7 +369,7 @@ def _read_airplay_frames_socket(proc: subprocess.Popen, conn: _socket.socket,
         pass
 
     if frame_count == 0 and uxplay_error:
-        print(f"INFO: uxplay reportou erros: {'; '.join(uxplay_error)}", file=sys.stderr, flush=True)
+        print(f"INFO: uxplay reported errors: {'; '.join(uxplay_error)}", file=sys.stderr, flush=True)
 
     return frame_count
 
@@ -379,13 +379,13 @@ def stream_airplay() -> None:
     RETRY_DELAY = 1
 
     uxplay_not_found_msg = (
-        "MIRROR_ERROR: uxplay não encontrado. "
-        + ("Instale uxplay-windows: https://github.com/leapbtw/uxplay-windows"
-           if IS_WINDOWS else "Instale com: sudo apt install uxplay")
+        "MIRROR_ERROR: uxplay not found. "
+        + ("Install uxplay-windows: https://github.com/leapbtw/uxplay-windows"
+           if IS_WINDOWS else "Install with: sudo apt install uxplay")
     )
 
     for attempt in range(1, MAX_RETRIES + 1):
-        print(f"INFO: Iniciando servidor AirPlay via uxplay (tentativa {attempt}/{MAX_RETRIES})...",
+        print(f"INFO: Starting AirPlay server via uxplay (attempt {attempt}/{MAX_RETRIES})...",
               file=sys.stderr, flush=True)
 
         _kill_uxplay()
@@ -435,27 +435,27 @@ def stream_airplay() -> None:
 
             if "DNS-SD" in err or "DNSService" in err:
                 if IS_WINDOWS:
-                    print("MIRROR_ERROR: Serviço Bonjour não está rodando. "
-                          "Instale o iTunes ou Bonjour Print Services da Apple.",
+                    print("MIRROR_ERROR: Bonjour service is not running. "
+                          "Install iTunes or Bonjour Print Services from Apple.",
                           file=sys.stderr, flush=True)
                 else:
-                    print("MIRROR_ERROR: Serviço DNS-SD (Avahi) não está rodando. "
-                          "Execute: sudo systemctl start avahi-daemon",
+                    print("MIRROR_ERROR: DNS-SD service (Avahi) is not running. "
+                          "Run: sudo systemctl start avahi-daemon",
                           file=sys.stderr, flush=True)
                 sys.exit(1)
 
             if attempt < MAX_RETRIES:
-                print(f"INFO: uxplay encerrou prematuramente, tentando novamente em {RETRY_DELAY}s...",
+                print(f"INFO: uxplay terminated prematurely, retrying in {RETRY_DELAY}s...",
                       file=sys.stderr, flush=True)
                 time.sleep(RETRY_DELAY)
                 continue
 
-            print(f"MIRROR_ERROR: uxplay falhou após {MAX_RETRIES} tentativas: {err}",
+            print(f"MIRROR_ERROR: uxplay failed after {MAX_RETRIES} attempts: {err}",
                   file=sys.stderr, flush=True)
             sys.exit(1)
 
         if not _wait_uxplay_listening(7000, timeout=8.0):
-            print("INFO: uxplay não abriu a porta 7000 a tempo",
+            print("INFO: uxplay did not open port 7000 in time",
                   file=sys.stderr, flush=True)
             _cleanup_uxplay()
             if IS_WINDOWS:
@@ -465,7 +465,7 @@ def stream_airplay() -> None:
             if attempt < MAX_RETRIES:
                 time.sleep(RETRY_DELAY)
                 continue
-            print("MIRROR_ERROR: uxplay falhou ao iniciar servidor na porta 7000",
+            print("MIRROR_ERROR: uxplay failed to start server on port 7000",
                   file=sys.stderr, flush=True)
             sys.exit(1)
 
@@ -477,7 +477,7 @@ def stream_airplay() -> None:
                 srv_sock.close()
                 srv_sock = None
             except _socket.timeout:
-                print("INFO: uxplay não conectou ao socket TCP a tempo",
+                print("INFO: uxplay did not connect to TCP socket in time",
                       file=sys.stderr, flush=True)
                 _cleanup_uxplay()
                 if srv_sock:
@@ -485,7 +485,7 @@ def stream_airplay() -> None:
                 if attempt < MAX_RETRIES:
                     time.sleep(RETRY_DELAY)
                     continue
-                print("MIRROR_ERROR: uxplay falhou ao conectar ao socket de vídeo",
+                print("MIRROR_ERROR: uxplay failed to connect to video socket",
                       file=sys.stderr, flush=True)
                 sys.exit(1)
 
@@ -498,7 +498,7 @@ def stream_airplay() -> None:
             else:
                 frame_count = _read_airplay_frames_fd(proc, r_fd)
         except Exception as e:
-            print(f"INFO: Exceção em _read_airplay_frames: {e}", file=sys.stderr, flush=True)
+            print(f"INFO: Exception in _read_airplay_frames: {e}", file=sys.stderr, flush=True)
             frame_count = 0
 
         if IS_WINDOWS:
@@ -518,13 +518,13 @@ def stream_airplay() -> None:
             sys.exit(0)
 
         if attempt < MAX_RETRIES:
-            print(f"INFO: Nenhum frame recebido, reiniciando uxplay em {RETRY_DELAY}s...",
+            print(f"INFO: No frames received, restarting uxplay in {RETRY_DELAY}s...",
                   file=sys.stderr, flush=True)
             time.sleep(RETRY_DELAY)
             continue
 
-    print("MIRROR_ERROR: AirPlay encerrou sem enviar vídeo após múltiplas tentativas. "
-          "Verifique se o iPhone está na mesma rede e tente novamente.",
+    print("MIRROR_ERROR: AirPlay ended without sending video after multiple attempts. "
+          "Make sure the iPhone is on the same network and try again.",
           file=sys.stderr, flush=True)
     sys.exit(1)
 
@@ -537,7 +537,7 @@ def _start_capture_worker(fq, capture_fn, label="primary"):
                 data, w, h = optimize_frame(raw)
                 fq.put((data, w, h))
             except (ConnectionError, BrokenPipeError, OSError) as e:
-                print(f"MIRROR_ERROR: Dispositivo desconectado ({label}): {e}", file=sys.stderr, flush=True)
+                print(f"MIRROR_ERROR: Device disconnected ({label}): {e}", file=sys.stderr, flush=True)
                 fq.put(None)
                 return
             except KeyboardInterrupt:
@@ -583,9 +583,9 @@ def screenshot_loop(screenshot_service, udid=None) -> None:
                 ss = ScreenshotService(lockdown=lockdown)
                 ss.take_screenshot()
                 _start_capture_worker(fq, ss.take_screenshot, f"worker-{i+2}")
-                print(f"INFO: Captura paralela worker-{i+2} ativa", file=sys.stderr, flush=True)
+                print(f"INFO: Parallel capture worker-{i+2} active", file=sys.stderr, flush=True)
             except Exception as e:
-                print(f"INFO: Captura paralela worker-{i+2} não disponível: {e}", file=sys.stderr, flush=True)
+                print(f"INFO: Parallel capture worker-{i+2} not available: {e}", file=sys.stderr, flush=True)
                 break
 
     _consume_frames(fq)
@@ -594,7 +594,7 @@ def screenshot_loop(screenshot_service, udid=None) -> None:
 def dvt_screenshot_loop(dvt) -> None:
     from pymobiledevice3.services.dvt.instruments.screenshot import Screenshot
     ss = Screenshot(dvt)
-    print("INFO: DVT Screenshot conectado", file=sys.stderr, flush=True)
+    print("INFO: DVT Screenshot connected", file=sys.stderr, flush=True)
     fq = _queue.Queue()
     _start_capture_worker(fq, ss.get_screenshot)
     _consume_frames(fq)
@@ -603,7 +603,7 @@ def dvt_screenshot_loop(dvt) -> None:
 def try_screenshot_service(lockdown, udid=None) -> bool:
     try:
         screenshot_service = ScreenshotService(lockdown=lockdown)
-        print("INFO: ScreenshotService conectado", file=sys.stderr, flush=True)
+        print("INFO: ScreenshotService connected", file=sys.stderr, flush=True)
         screenshot_loop(screenshot_service, udid)
         return True
     except Exception:
@@ -618,7 +618,7 @@ def try_auto_mount(udid: str) -> bool:
     if not os.path.isfile(pmd3):
         return False
 
-    print("INFO: Tentando auto-mount da imagem de desenvolvedor...", file=sys.stderr, flush=True)
+    print("INFO: Attempting auto-mount of developer image...", file=sys.stderr, flush=True)
     try:
         result = subprocess.run(
             [pmd3, "mounter", "auto-mount", "--udid", udid],
@@ -626,12 +626,12 @@ def try_auto_mount(udid: str) -> bool:
             timeout=30,
         )
         if result.returncode == 0:
-            print("INFO: Auto-mount concluído", file=sys.stderr, flush=True)
+            print("INFO: Auto-mount completed", file=sys.stderr, flush=True)
             return True
-        print(f"INFO: Auto-mount retornou código {result.returncode}", file=sys.stderr, flush=True)
+        print(f"INFO: Auto-mount returned code {result.returncode}", file=sys.stderr, flush=True)
         return False
     except Exception as e:
-        print(f"INFO: Auto-mount falhou: {e}", file=sys.stderr, flush=True)
+        print(f"INFO: Auto-mount failed: {e}", file=sys.stderr, flush=True)
         return False
 
 
@@ -675,23 +675,23 @@ def try_tunneld_screenshot(udid: str) -> bool:
     if not host or not port:
         return False
 
-    print(f"INFO: Conectando via tunneld {host}:{port}", file=sys.stderr, flush=True)
+    print(f"INFO: Connecting via tunneld {host}:{port}", file=sys.stderr, flush=True)
 
     try:
         rsd = RemoteServiceDiscoveryService((host, port))
         asyncio.run(rsd.connect())
-        print(f"INFO: RSD conectado", file=sys.stderr, flush=True)
+        print(f"INFO: RSD connected", file=sys.stderr, flush=True)
     except Exception as e:
-        print(f"INFO: Falha ao conectar RSD: {e}", file=sys.stderr, flush=True)
+        print(f"INFO: Failed to connect RSD: {e}", file=sys.stderr, flush=True)
         return False
 
     try:
         ss = ScreenshotService(rsd)
-        print("INFO: ScreenshotService via tunnel conectado", file=sys.stderr, flush=True)
+        print("INFO: ScreenshotService via tunnel connected", file=sys.stderr, flush=True)
         screenshot_loop(ss)
         return True
     except Exception as e:
-        print(f"INFO: ScreenshotService indisponível ({e}), usando DVT...", file=sys.stderr, flush=True)
+        print(f"INFO: ScreenshotService unavailable ({e}), using DVT...", file=sys.stderr, flush=True)
 
     try:
         from pymobiledevice3.services.dvt.dvt_secure_socket_proxy import DvtSecureSocketProxyService
@@ -700,12 +700,12 @@ def try_tunneld_screenshot(udid: str) -> bool:
         dvt_screenshot_loop(dvt)
         return True
     except Exception as e:
-        print(f"INFO: Falha no DVT screenshot via tunnel: {e}", file=sys.stderr, flush=True)
+        print(f"INFO: DVT screenshot via tunnel failed: {e}", file=sys.stderr, flush=True)
         return False
 
 
 def stream_idevicescreenshot(udid: str) -> None:
-    print("INFO: Tentando idevicescreenshot como fallback...", file=sys.stderr, flush=True)
+    print("INFO: Trying idevicescreenshot as fallback...", file=sys.stderr, flush=True)
 
     tmp_fd, tmp_path = tempfile.mkstemp(suffix=".png")
     os.close(tmp_fd)
@@ -734,12 +734,12 @@ def stream_idevicescreenshot(udid: str) -> None:
 
 
 def stream_pymobiledevice3(udid: str) -> None:
-    print("INFO: Usando pymobiledevice3", file=sys.stderr, flush=True)
+    print("INFO: Using pymobiledevice3", file=sys.stderr, flush=True)
 
     try:
         lockdown = create_using_usbmux(serial=udid)
     except Exception as e:
-        print(f"MIRROR_ERROR: Falha ao conectar: {e}", file=sys.stderr, flush=True)
+        print(f"MIRROR_ERROR: Failed to connect: {e}", file=sys.stderr, flush=True)
         sys.exit(1)
 
     ios_version = 0
@@ -751,7 +751,7 @@ def stream_pymobiledevice3(udid: str) -> None:
     if try_screenshot_service(lockdown, udid):
         return
 
-    print("INFO: ScreenshotService direto falhou, tentando alternativas...", file=sys.stderr, flush=True)
+    print("INFO: Direct ScreenshotService failed, trying alternatives...", file=sys.stderr, flush=True)
 
     if ios_version >= 17:
         if try_tunneld_screenshot(udid):
@@ -775,11 +775,11 @@ def main() -> None:
         return
 
     if len(sys.argv) < 2:
-        print("Uso: mirror_stream.py <UDID> | --airplay", file=sys.stderr, flush=True)
+        print("Usage: mirror_stream.py <UDID> | --airplay", file=sys.stderr, flush=True)
         sys.exit(1)
 
     udid = sys.argv[1]
-    print(f"INFO: Iniciando stream para dispositivo {udid}", file=sys.stderr, flush=True)
+    print(f"INFO: Starting stream for device {udid}", file=sys.stderr, flush=True)
 
     if USE_PYMOBILEDEVICE3:
         stream_pymobiledevice3(udid)

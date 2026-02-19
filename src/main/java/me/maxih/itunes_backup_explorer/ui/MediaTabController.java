@@ -91,7 +91,23 @@ public class MediaTabController {
         );
 
         gridScrollPane.viewportBoundsProperty().addListener((obs, oldBounds, newBounds) -> {
-            mediaGrid.setPrefWrapLength(newBounds.getWidth());
+            double width = newBounds.getWidth();
+            if (width > 0) {
+                mediaGrid.setPrefWrapLength(width);
+                mediaGrid.requestLayout();
+            }
+        });
+
+        Platform.runLater(() -> {
+            if (splitPane.getDividers().size() > 0) {
+                splitPane.getDividers().get(0).positionProperty().addListener((obs, oldPos, newPos) -> {
+                    double width = gridScrollPane.getViewportBounds().getWidth();
+                    if (width > 0) {
+                        mediaGrid.setPrefWrapLength(width);
+                        mediaGrid.requestLayout();
+                    }
+                });
+            }
         });
 
         Thread toolsCheck = new Thread(MediaConverter::detectTools, "media-tools-check");
@@ -100,6 +116,14 @@ public class MediaTabController {
     }
 
     public void tabShown(ITunesBackup backup) {
+        Platform.runLater(() -> {
+            double width = gridScrollPane.getViewportBounds().getWidth();
+            if (width > 0) {
+                mediaGrid.setPrefWrapLength(width);
+                mediaGrid.requestLayout();
+            }
+        });
+
         if (backup == this.selectedBackup && !this.allMedia.isEmpty()) return;
 
         this.selectedBackup = backup;

@@ -65,6 +65,9 @@ public class FilesTabController {
     Button selectAllFilesButton;
 
     @FXML
+    CheckBox filesOnlyFilterCheckBox;
+
+    @FXML
     public void initialize() {
         setupDomainTree();
         setupFilesTree();
@@ -80,6 +83,7 @@ public class FilesTabController {
 
         fileFilterField.textProperty().addListener((obs, oldValue, newValue) -> refreshCurrentDomainTree());
         sortComboBox.valueProperty().addListener((obs, oldValue, newValue) -> refreshCurrentDomainTree());
+        filesOnlyFilterCheckBox.selectedProperty().addListener((obs, oldValue, newValue) -> refreshCurrentDomainTree());
 
         setFileControlsEnabled(false);
     }
@@ -292,6 +296,7 @@ public class FilesTabController {
         this.filesTreeView.setRoot(null);
         this.currentDomainFiles = Collections.emptyList();
         this.fileFilterField.clear();
+        this.filesOnlyFilterCheckBox.setSelected(false);
         setFileControlsEnabled(false);
 
         List<BackupFile> domains;
@@ -383,14 +388,22 @@ public class FilesTabController {
         if (source == null) return Collections.emptyList();
 
         String query = fileFilterField.getText() == null ? "" : fileFilterField.getText().trim().toLowerCase(Locale.ROOT);
-        if (query.isEmpty()) return new ArrayList<>(source);
+        boolean filesOnly = filesOnlyFilterCheckBox.isSelected();
+
+        if (query.isEmpty() && !filesOnly) return new ArrayList<>(source);
 
         Map<String, BackupFile> byPath = source.stream().collect(Collectors.toMap(f -> f.relativePath, f -> f, (first, second) -> first));
         LinkedHashSet<BackupFile> visible = new LinkedHashSet<>();
 
         for (BackupFile file : source) {
-            String haystack = (file.relativePath + " " + file.getFileName()).toLowerCase(Locale.ROOT);
-            if (!haystack.contains(query)) continue;
+            if (filesOnly && file.getFileType() == BackupFile.FileType.SYMBOLIC_LINK) continue;
+
+            if (!query.isEmpty()) {
+                String haystack = (file.relativePath + " " + file.getFileName()).toLowerCase(Locale.ROOT);
+                if (!haystack.contains(query)) continue;
+            }
+
+            if (filesOnly && file.getFileType() == BackupFile.FileType.DIRECTORY) continue;
 
             visible.add(file);
             String parentPath = file.getParentPath();
@@ -484,6 +497,7 @@ public class FilesTabController {
     private void setFileControlsEnabled(boolean enabled) {
         fileFilterField.setDisable(!enabled);
         sortComboBox.setDisable(!enabled);
+        filesOnlyFilterCheckBox.setDisable(!enabled);
         expandAllButton.setDisable(!enabled);
         collapseAllButton.setDisable(!enabled);
         selectAllFilesButton.setDisable(!enabled);
