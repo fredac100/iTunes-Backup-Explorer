@@ -50,16 +50,10 @@ public class FilesTabController {
     Label selectedFilesCount;
 
     @FXML
-    Label selectedDomainSummary;
-
-    @FXML
     TextField fileFilterField;
 
     @FXML
     ComboBox<String> sortComboBox;
-
-    @FXML
-    CheckBox filesOnlyFilterCheckBox;
 
     @FXML
     Button expandAllButton;
@@ -86,7 +80,6 @@ public class FilesTabController {
 
         fileFilterField.textProperty().addListener((obs, oldValue, newValue) -> refreshCurrentDomainTree());
         sortComboBox.valueProperty().addListener((obs, oldValue, newValue) -> refreshCurrentDomainTree());
-        filesOnlyFilterCheckBox.selectedProperty().addListener((obs, oldValue, newValue) -> refreshCurrentDomainTree());
 
         setFileControlsEnabled(false);
     }
@@ -162,7 +155,6 @@ public class FilesTabController {
                 domainsTreeView.setCursor(Cursor.DEFAULT);
                 filesTreeView.setCursor(Cursor.DEFAULT);
                 updateFileSelectionCount();
-                updateCurrentDomainSummary();
                 setFileControlsEnabled(true);
             });
 
@@ -300,7 +292,6 @@ public class FilesTabController {
         this.filesTreeView.setRoot(null);
         this.currentDomainFiles = Collections.emptyList();
         this.fileFilterField.clear();
-        this.filesOnlyFilterCheckBox.setSelected(false);
         setFileControlsEnabled(false);
 
         List<BackupFile> domains;
@@ -355,7 +346,6 @@ public class FilesTabController {
         }
         updateDomainSelectionCount();
         updateFileSelectionCount();
-        updateCurrentDomainSummary();
     }
 
     private TreeItem<BackupFileEntry> findDomainTreeItem(TreeItem<BackupFileEntry> root, String domain) {
@@ -380,7 +370,6 @@ public class FilesTabController {
 
         filesTreeView.setRoot(newRoot);
         updateFileSelectionCount();
-        updateCurrentDomainSummary();
     }
 
     private void buildFilteredTree(TreeItem<BackupFileEntry> root, List<BackupFile> source) throws BackupReadException {
@@ -394,22 +383,14 @@ public class FilesTabController {
         if (source == null) return Collections.emptyList();
 
         String query = fileFilterField.getText() == null ? "" : fileFilterField.getText().trim().toLowerCase(Locale.ROOT);
-        boolean filesOnly = filesOnlyFilterCheckBox.isSelected();
-        boolean hasQuery = !query.isEmpty();
-
-        if (!hasQuery && !filesOnly) {
-            return new ArrayList<>(source);
-        }
+        if (query.isEmpty()) return new ArrayList<>(source);
 
         Map<String, BackupFile> byPath = source.stream().collect(Collectors.toMap(f -> f.relativePath, f -> f, (first, second) -> first));
         LinkedHashSet<BackupFile> visible = new LinkedHashSet<>();
 
         for (BackupFile file : source) {
-            if (filesOnly && file.getFileType() != BackupFile.FileType.FILE) continue;
-            if (hasQuery) {
-                String haystack = (file.relativePath + " " + file.getFileName()).toLowerCase(Locale.ROOT);
-                if (!haystack.contains(query)) continue;
-            }
+            String haystack = (file.relativePath + " " + file.getFileName()).toLowerCase(Locale.ROOT);
+            if (!haystack.contains(query)) continue;
 
             visible.add(file);
             String parentPath = file.getParentPath();
@@ -494,21 +475,6 @@ public class FilesTabController {
         selectedFilesCount.setText(count + " file" + (count != 1 ? "s" : "") + " selected");
     }
 
-    private void updateCurrentDomainSummary() {
-        if (selectedDomainSummary == null) return;
-
-        if (filesTreeView.getRoot() == null) {
-            selectedDomainSummary.setText("No domain selected");
-            return;
-        }
-
-        long files = currentDomainFiles.stream().filter(file -> file.getFileType() == BackupFile.FileType.FILE).count();
-        long folders = currentDomainFiles.stream().filter(file -> file.getFileType() == BackupFile.FileType.DIRECTORY).count();
-        long size = currentDomainFiles.stream().mapToLong(BackupFile::getSize).sum();
-
-        selectedDomainSummary.setText(currentDomainFiles.size() + " entries | " + files + " files | " + folders + " folders | " + FileSize.format(size));
-    }
-
     private Stream<TreeItem<BackupFileEntry>> flattenAllChildren(TreeItem<BackupFileEntry> parent) {
         if (parent.isLeaf()) return Stream.empty();
 
@@ -518,7 +484,6 @@ public class FilesTabController {
     private void setFileControlsEnabled(boolean enabled) {
         fileFilterField.setDisable(!enabled);
         sortComboBox.setDisable(!enabled);
-        filesOnlyFilterCheckBox.setDisable(!enabled);
         expandAllButton.setDisable(!enabled);
         collapseAllButton.setDisable(!enabled);
         selectAllFilesButton.setDisable(!enabled);

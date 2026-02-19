@@ -72,11 +72,6 @@ IF EXIST "%MEDIA_TOOLS_SRC%\ffmpeg-portable" (
     XCOPY /E /I /Q "%MEDIA_TOOLS_SRC%\ffmpeg-portable" "%MEDIA_TOOLS_DEST%\ffmpeg-portable"
 )
 
-IF EXIST "%MEDIA_TOOLS_SRC%\imagemagick-portable" (
-    echo Including bundled ImageMagick...
-    XCOPY /E /I /Q "%MEDIA_TOOLS_SRC%\imagemagick-portable" "%MEDIA_TOOLS_DEST%\imagemagick-portable"
-)
-
 
 CALL "%JAVA_HOME%\bin\jpackage" ^
     --type msi ^

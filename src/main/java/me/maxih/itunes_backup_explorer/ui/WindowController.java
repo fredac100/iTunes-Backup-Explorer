@@ -531,7 +531,7 @@ public class WindowController {
         confirm.setHeaderText("Download media tools?");
         confirm.setContentText(
                 "To display thumbnails for videos and HEIC photos, the app needs to download " +
-                "ffmpeg and ImageMagick (~130 MB total).\n\nDownload now?");
+                "ffmpeg (~85 MB).\n\nDownload now?");
 
         DialogPane dp = confirm.getDialogPane();
         dp.getStylesheets().add(
@@ -557,7 +557,7 @@ public class WindowController {
         Label titleLabel = new Label("Downloading media tools");
         titleLabel.getStyleClass().add("section-title");
 
-        Label descLabel = new Label("Downloading ffmpeg and ImageMagick for video and HEIC thumbnail support.\nThis is a one-time setup.");
+        Label descLabel = new Label("Downloading ffmpeg for video and HEIC thumbnail support.\nThis is a one-time setup.");
         descLabel.setWrapText(true);
 
         ProgressBar progressBar = new ProgressBar(-1);
@@ -592,14 +592,11 @@ public class WindowController {
                 line -> logArea.appendText(line + "\n"),
                 () -> {
                     setupStage.close();
-                    if (MediaConverter.isFfmpegAvailable() && MediaConverter.isImageMagickAvailable()) {
-                        Dialogs.showAlert(Alert.AlertType.INFORMATION, "Media tools installed successfully. Video and HEIC thumbnails are now available.");
-                    } else if (MediaConverter.isFfmpegAvailable() || MediaConverter.isImageMagickAvailable()) {
-                        Dialogs.showAlert(Alert.AlertType.WARNING,
-                                "Some media tools could not be installed. Thumbnails may not work for all formats.");
+                    if (MediaConverter.isFfmpegAvailable()) {
+                        Dialogs.showAlert(Alert.AlertType.INFORMATION, "ffmpeg installed successfully. Video and HEIC thumbnails are now available.");
                     } else {
                         Dialogs.showAlert(Alert.AlertType.ERROR,
-                                "Media tools could not be installed. Check the log for errors.");
+                                "ffmpeg could not be installed. Check the log for errors.");
                     }
                 },
                 error -> {

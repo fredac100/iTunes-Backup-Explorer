@@ -21,12 +21,9 @@ public class MediaConverter {
     private static final Path CONFIG_DIR = Path.of(System.getProperty("user.home"),
             ".config", "itunes-backup-explorer");
     private static final Path PORTABLE_FFMPEG_DIR = CONFIG_DIR.resolve("ffmpeg-portable");
-    private static final Path PORTABLE_IMAGEMAGICK_DIR = CONFIG_DIR.resolve("imagemagick-portable");
 
     private static final String FFMPEG_DOWNLOAD_URL =
             "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip";
-    private static final String IMAGEMAGICK_DOWNLOAD_URL =
-            "https://imagemagick.org/archive/binaries/ImageMagick-7.1.1-43-portable-Q16-HDRI-x64.zip";
 
     private static Boolean ffmpegAvailable;
     private static Boolean imageMagickAvailable;
@@ -38,7 +35,7 @@ public class MediaConverter {
             effectiveFfmpegPath = resolveFfmpeg();
             ffmpegAvailable = effectiveFfmpegPath != null;
             if (ffmpegAvailable) {
-                logger.info("ffmpeg detected at {} - video thumbnails enabled", effectiveFfmpegPath);
+                logger.info("ffmpeg detected at {} - video/HEIC thumbnails enabled", effectiveFfmpegPath);
             } else {
                 logger.info("ffmpeg not found - videos will use placeholders");
             }
@@ -51,9 +48,9 @@ public class MediaConverter {
             effectiveImageMagickPath = resolveImageMagick();
             imageMagickAvailable = effectiveImageMagickPath != null;
             if (imageMagickAvailable) {
-                logger.info("ImageMagick detected at {} - HEIC support enabled", effectiveImageMagickPath);
+                logger.info("ImageMagick detected at {} - HEIC fallback enabled", effectiveImageMagickPath);
             } else {
-                logger.info("ImageMagick not found - HEIC will use placeholders");
+                logger.info("ImageMagick not found on system PATH");
             }
         }
         return imageMagickAvailable;
@@ -74,15 +71,6 @@ public class MediaConverter {
     }
 
     private static String resolveImageMagick() {
-        if (DeviceService.IS_WINDOWS) {
-            Path bundled = getBundledMediaToolsDir();
-            if (bundled != null) {
-                Path found = findExecutable(bundled.resolve("imagemagick-portable"), "magick.exe");
-                if (found != null) return found.toString();
-            }
-            Path portable = findExecutable(PORTABLE_IMAGEMAGICK_DIR, "magick.exe");
-            if (portable != null) return portable.toString();
-        }
         if (testCommand("magick", "-version")) return "magick";
         if (testCommand("convert", "-version")) return "convert";
         return null;
@@ -111,7 +99,7 @@ public class MediaConverter {
     }
 
     public static boolean isMediaToolsNeeded() {
-        return DeviceService.IS_WINDOWS && (!isFfmpegAvailable() || !isImageMagickAvailable());
+        return DeviceService.IS_WINDOWS && !isFfmpegAvailable();
     }
 
     public static void resetDetection() {
@@ -125,12 +113,7 @@ public class MediaConverter {
                                         Runnable onDone, Consumer<String> onError) {
         Thread setupThread = new Thread(() -> {
             try {
-                boolean needFfmpeg = !isFfmpegAvailable();
-                boolean needImageMagick = !isImageMagickAvailable();
-
-                if (needFfmpeg) setupFfmpeg(onProgressLine);
-                if (needImageMagick) setupImageMagick(onProgressLine);
-
+                if (!isFfmpegAvailable()) setupFfmpeg(onProgressLine);
                 resetDetection();
                 javafx.application.Platform.runLater(onDone);
             } catch (Exception e) {
@@ -154,20 +137,6 @@ public class MediaConverter {
             Files.deleteIfExists(zipFile);
         }
         emitLog(log, "ffmpeg installed successfully.");
-    }
-
-    private static void setupImageMagick(Consumer<String> log) throws IOException {
-        Files.createDirectories(PORTABLE_IMAGEMAGICK_DIR);
-        Path zipFile = PORTABLE_IMAGEMAGICK_DIR.resolve("imagemagick.zip");
-        try {
-            emitLog(log, "Downloading ImageMagick (~50 MB)...");
-            DeviceService.downloadFile(IMAGEMAGICK_DOWNLOAD_URL, zipFile, log);
-            emitLog(log, "Extracting ImageMagick...");
-            DeviceService.extractZip(zipFile, PORTABLE_IMAGEMAGICK_DIR);
-        } finally {
-            Files.deleteIfExists(zipFile);
-        }
-        emitLog(log, "ImageMagick installed successfully.");
     }
 
     private static void emitLog(Consumer<String> log, String message) {
@@ -210,8 +179,58 @@ public class MediaConverter {
     }
 
     private static File convertHeifToJpeg(File source, int maxSize) throws IOException {
-        if (!isImageMagickAvailable()) return null;
+        if (isFfmpegAvailable()) {
+            File result = convertHeifViaFfmpeg(source, maxSize);
+            if (result != null) return result;
+        }
+        if (isImageMagickAvailable()) {
+            return convertHeifViaImageMagick(source, maxSize);
+        }
+        return null;
+    }
 
+    private static File convertHeifViaFfmpeg(File source, int maxSize) throws IOException {
+        File output = Files.createTempFile("heic_", ".jpg").toFile();
+        output.deleteOnExit();
+
+        try {
+            String scale = "scale='min(" + maxSize + ",iw)':'min(" + maxSize + ",ih)':force_original_aspect_ratio=decrease";
+            ProcessBuilder pb = new ProcessBuilder(
+                    effectiveFfmpegPath, "-y",
+                    "-i", source.getAbsolutePath(),
+                    "-vf", scale,
+                    "-q:v", "2",
+                    output.getAbsolutePath()
+            );
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            process.getInputStream().readAllBytes();
+            boolean finished = process.waitFor(15, TimeUnit.SECONDS);
+
+            if (!finished) {
+                process.destroyForcibly();
+                output.delete();
+                return null;
+            }
+
+            if (process.exitValue() != 0 || !output.exists() || output.length() == 0) {
+                output.delete();
+                return null;
+            }
+
+            return output;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            output.delete();
+            return null;
+        } catch (Exception e) {
+            logger.warn("Failed to convert HEIC via ffmpeg {}: {}", source.getName(), e.getMessage());
+            output.delete();
+            return null;
+        }
+    }
+
+    private static File convertHeifViaImageMagick(File source, int maxSize) throws IOException {
         File output = Files.createTempFile("heic_", ".jpg").toFile();
         output.deleteOnExit();
 
@@ -245,7 +264,7 @@ public class MediaConverter {
             output.delete();
             return null;
         } catch (Exception e) {
-            logger.warn("Failed to convert HEIC {}: {}", source.getName(), e.getMessage());
+            logger.warn("Failed to convert HEIC via ImageMagick {}: {}", source.getName(), e.getMessage());
             output.delete();
             return null;
         }
