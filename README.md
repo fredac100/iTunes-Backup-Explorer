@@ -10,7 +10,7 @@
   <a href="#device-control">Device Control</a> •
   <a href="#backup-explorer">Backup Explorer</a> •
   <a href="#screenshots">Screenshots</a> •
-  <a href="#installation">Installation</a>
+  <a href="#quick-start">Installation</a>
 </p>
 
 <p align="center">
