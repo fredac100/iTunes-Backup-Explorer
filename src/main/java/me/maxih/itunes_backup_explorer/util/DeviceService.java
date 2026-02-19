@@ -161,10 +161,25 @@ public class DeviceService {
         long totalDiskCapacity = -1;
         long totalDataCapacity = -1;
         long totalDataAvailable = -1;
+        long totalMobileAppUsage = 0;
+        long webAppCacheUsage = 0;
+        long mediaCacheUsage = 0;
         if (diskDict != null) {
             totalDiskCapacity = getLong(diskDict, "TotalDiskCapacity", -1);
             totalDataCapacity = getLong(diskDict, "TotalDataCapacity", -1);
             totalDataAvailable = getLong(diskDict, "AmountDataAvailable", -1);
+            webAppCacheUsage = getLong(diskDict, "WebAppCacheUsage", 0);
+            mediaCacheUsage = getLong(diskDict, "MediaCacheUsage", 0);
+
+            NSObject appUsageObj = diskDict.objectForKey("MobileApplicationUsage");
+            if (appUsageObj instanceof NSDictionary appUsageDict) {
+                for (String key : appUsageDict.allKeys()) {
+                    NSObject val = appUsageDict.objectForKey(key);
+                    if (val instanceof NSNumber num) {
+                        totalMobileAppUsage += num.longValue();
+                    }
+                }
+            }
         }
 
         DeviceInfo info = new DeviceInfo(
@@ -181,7 +196,10 @@ public class DeviceService {
                 batteryStatus,
                 totalDiskCapacity,
                 totalDataCapacity,
-                totalDataAvailable
+                totalDataAvailable,
+                totalMobileAppUsage,
+                webAppCacheUsage,
+                mediaCacheUsage
         );
 
         return Optional.of(info);
@@ -218,6 +236,9 @@ public class DeviceService {
                 "    'TotalDiskCapacity': disk.get('TotalDiskCapacity', -1),",
                 "    'TotalDataCapacity': disk.get('TotalDataCapacity', -1),",
                 "    'AmountDataAvailable': disk.get('AmountDataAvailable', -1),",
+                "    'WebAppCacheUsage': disk.get('WebAppCacheUsage', 0),",
+                "    'MediaCacheUsage': disk.get('MediaCacheUsage', 0),",
+                "    'TotalMobileAppUsage': sum(v for v in (disk.get('MobileApplicationUsage') or {}).values() if isinstance(v, (int, float))),",
                 "}))"
         );
         byte[] output = runCommand(30, activePython(), "-c", script);
@@ -245,6 +266,13 @@ public class DeviceService {
             try { totalDataCapacity = Long.parseLong(values.getOrDefault("TotalDataCapacity", "-1")); } catch (NumberFormatException ignored) {}
             try { totalDataAvailable = Long.parseLong(values.getOrDefault("AmountDataAvailable", "-1")); } catch (NumberFormatException ignored) {}
 
+            long totalMobileAppUsage = 0;
+            long webAppCacheUsage = 0;
+            long mediaCacheUsage = 0;
+            try { totalMobileAppUsage = Long.parseLong(values.getOrDefault("TotalMobileAppUsage", "0")); } catch (NumberFormatException ignored) {}
+            try { webAppCacheUsage = Long.parseLong(values.getOrDefault("WebAppCacheUsage", "0")); } catch (NumberFormatException ignored) {}
+            try { mediaCacheUsage = Long.parseLong(values.getOrDefault("MediaCacheUsage", "0")); } catch (NumberFormatException ignored) {}
+
             DeviceInfo info = new DeviceInfo(
                     values.getOrDefault("DeviceName", ""),
                     values.getOrDefault("ModelNumber", ""),
@@ -256,7 +284,8 @@ public class DeviceService {
                     values.getOrDefault("PhoneNumber", ""),
                     values.getOrDefault("WiFiAddress", ""),
                     batteryLevel, batteryStatus,
-                    totalDiskCapacity, totalDataCapacity, totalDataAvailable
+                    totalDiskCapacity, totalDataCapacity, totalDataAvailable,
+                    totalMobileAppUsage, webAppCacheUsage, mediaCacheUsage
             );
             return Optional.of(info);
         } catch (Exception e) {

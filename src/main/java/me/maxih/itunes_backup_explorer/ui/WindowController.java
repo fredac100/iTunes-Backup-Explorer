@@ -643,11 +643,7 @@ public class WindowController {
         long estimatedTotalBytes = 0;
         Optional<DeviceInfo> deviceInfo = DeviceService.getDeviceInfo(udid);
         if (deviceInfo.isPresent()) {
-            long capacity = deviceInfo.get().totalDataCapacity();
-            long available = deviceInfo.get().totalDataAvailable();
-            if (capacity > 0 && available >= 0) {
-                estimatedTotalBytes = capacity - available;
-            }
+            estimatedTotalBytes = deviceInfo.get().estimatedBackupSize();
         }
 
         DirectoryChooser chooser = new DirectoryChooser();
@@ -755,6 +751,7 @@ public class WindowController {
         long[] prevCliTransferred = {0};
         long[] prevCliTime = {0};
         double[] cliSmoothedSpeed = {0};
+        String[] currentProgressFile = {""};
 
         javafx.concurrent.Task<DeviceService.BackupResult> task = new javafx.concurrent.Task<>() {
             @Override
@@ -851,13 +848,22 @@ public class WindowController {
 
                             boolean isIdeviceProgress = ideviceProgressPattern.matcher(trimmed).find();
 
-                            if (!isIdeviceProgress) {
-                                if (trimmed.startsWith("Receiving") || trimmed.startsWith("Received")) {
-                                    fileCount[0]++;
+                            if (isIdeviceProgress) {
+                                int bracketEnd = trimmed.indexOf(']');
+                                if (bracketEnd > 1) {
+                                    String filePath = trimmed.substring(1, bracketEnd);
+                                    if (!filePath.equals(currentProgressFile[0])) {
+                                        currentProgressFile[0] = filePath;
+                                        fileCount[0]++;
+                                    }
                                 }
+                            }
+
+                            if (!isIdeviceProgress) {
+                                long elapsedSec = (System.currentTimeMillis() - startTime[0]) / 1000;
                                 Platform.runLater(() -> {
                                     logArea.appendText(trimmed + "\n");
-                                    filesLabel.setText("Files received: " + fileCount[0]);
+                                    filesLabel.setText("Files received: " + fileCount[0] + "  |  Elapsed: " + formatDuration(elapsedSec));
                                 });
                             }
 
@@ -919,16 +925,28 @@ public class WindowController {
                                 String statusText = "Current file: " + sm.group(1) + " " + sm.group(2) +
                                         " / " + sm.group(3) + " " + sm.group(4);
 
+                                int logPct = (int) (overallPct / 5) * 5;
+                                boolean shouldLog = logPct > lastLoggedPct[0] && logPct % 5 == 0 && overallPct > 0;
+                                if (shouldLog) lastLoggedPct[0] = logPct;
+                                String logEntry = null;
+                                if (shouldLog) {
+                                    long elapsed = (now - startTime[0]) / 1000;
+                                    logEntry = logPct + "% completed — " + formatSize((long) totalTransferred) + " transferred (" + formatDuration(elapsed) + " elapsed)\n";
+                                }
+
                                 double pctFinal = overallPct;
                                 String speedFinal = speedText;
                                 String etaFinal = etaText;
                                 String transferredFinal = transferredText;
+                                long elapsedSec = (now - startTime[0]) / 1000;
+                                String logEntryFinal = logEntry;
 
                                 Platform.runLater(() -> {
                                     statusLabel.setText(statusText);
                                     transferredLabel.setText(transferredFinal);
                                     speedLabel.setText(speedFinal);
                                     etaLabel.setText(etaFinal);
+                                    filesLabel.setText("Files received: " + fileCount[0] + "  |  Elapsed: " + formatDuration(elapsedSec));
                                     if (finalEstimatedTotalBytes > 0) {
                                         progressBar.setProgress(pctFinal / 100.0);
                                         percentLabel.setText(String.format("%.1f%%", pctFinal));
@@ -936,6 +954,7 @@ public class WindowController {
                                         progressBar.setProgress(-1);
                                         percentLabel.setText(formatSize((long) (accumulatedBytes[0] + fileCurrent)));
                                     }
+                                    if (logEntryFinal != null) logArea.appendText(logEntryFinal);
                                 });
                             } else if (isIdeviceProgress) {
                                 Matcher pctMatcher = idevicePctPattern.matcher(trimmed);
@@ -945,10 +964,10 @@ public class WindowController {
                                     if (now - lastUiUpdate[0] < 500) return;
                                     lastUiUpdate[0] = now;
 
+                                    long elapsedSec = (now - startTime[0]) / 1000;
                                     Platform.runLater(() -> {
-                                        progressBar.setProgress(pct / 100.0);
-                                        percentLabel.setText(pct + "%");
-                                        statusLabel.setText("Backup in progress...");
+                                        statusLabel.setText("Current file: " + pct + "% complete");
+                                        filesLabel.setText("Files received: " + fileCount[0] + "  |  Elapsed: " + formatDuration(elapsedSec));
                                     });
                                 }
                             }
@@ -1095,19 +1114,35 @@ public class WindowController {
                         }
                     }
 
+                    int logPct = (int) (pct / 5) * 5;
+                    boolean shouldLog = logPct > lastLoggedPct[0] && logPct % 5 == 0 && pct > 0;
+                    if (shouldLog) lastLoggedPct[0] = logPct;
+                    String logEntry = null;
+                    if (shouldLog) {
+                        long elapsed = (now - startTime[0]) / 1000;
+                        logEntry = logPct + "% completed — " + formatSize(dirSize) + " transferred (" + formatDuration(elapsed) + " elapsed)\n";
+                    }
+
                     double pctFinal = pct;
                     String speedFinal = speedText;
                     String etaFinal = etaText;
                     String transferredFinal = transferredText;
+                    String logEntryFinal = logEntry;
+                    long elapsedSec = (now - startTime[0]) / 1000;
 
                     Platform.runLater(() -> {
                         transferredLabel.setText(transferredFinal);
                         speedLabel.setText(speedFinal);
                         etaLabel.setText(etaFinal);
+                        filesLabel.setText("Files received: " + fileCount[0] + "  |  Elapsed: " + formatDuration(elapsedSec));
                         if (finalEstimatedTotalBytes > 0 && pctFinal > 0) {
                             progressBar.setProgress(pctFinal / 100.0);
                             percentLabel.setText(String.format("%.1f%%", pctFinal));
+                        } else {
+                            progressBar.setProgress(-1);
+                            percentLabel.setText(formatSize(dirSize));
                         }
+                        if (logEntryFinal != null) logArea.appendText(logEntryFinal);
                     });
                 }
             }, 3000, 3000);
