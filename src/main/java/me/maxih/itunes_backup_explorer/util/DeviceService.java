@@ -569,16 +569,30 @@ public class DeviceService {
     }
 
     static void downloadFile(String urlStr, Path destination, Consumer<String> log) throws IOException {
-        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-        conn.setConnectTimeout(30_000);
-        conn.setReadTimeout(60_000);
-        conn.setInstanceFollowRedirects(true);
-        conn.setRequestMethod("GET");
+        String currentUrl = urlStr;
+        HttpURLConnection conn = null;
 
-        int responseCode = conn.getResponseCode();
-        if (responseCode != 200) {
-            conn.disconnect();
-            throw new IOException("Download failed (HTTP " + responseCode + "): " + urlStr);
+        for (int redirects = 0; redirects < 10; redirects++) {
+            conn = (HttpURLConnection) new URL(currentUrl).openConnection();
+            conn.setConnectTimeout(30_000);
+            conn.setReadTimeout(60_000);
+            conn.setInstanceFollowRedirects(false);
+            conn.setRequestMethod("GET");
+
+            int code = conn.getResponseCode();
+            if (code == 301 || code == 302 || code == 303 || code == 307 || code == 308) {
+                String location = conn.getHeaderField("Location");
+                conn.disconnect();
+                if (location == null) throw new IOException("Redirect without Location header from " + currentUrl);
+                currentUrl = location;
+                continue;
+            }
+
+            if (code != 200) {
+                conn.disconnect();
+                throw new IOException("Download failed (HTTP " + code + "): " + currentUrl);
+            }
+            break;
         }
 
         long totalSize = conn.getContentLengthLong();
