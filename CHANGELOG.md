@@ -308,15 +308,19 @@ git clone https://github.com/fredac100/iTunes-Backup-Explorer.git
 cd iTunes-Backup-Explorer
 ```
 
-**Windows:** double-click `run.bat`
+**Windows:**
+```
+compile.bat
+run.bat
+```
 
 **Linux/macOS:**
 ```bash
-chmod +x run.sh
+./compile.sh
 ./run.sh
 ```
 
-The script automatically compiles on the first run and opens the app.
+`compile` builds the fat JAR (required on first run). `run` launches the app.
 
 ### Optional dependencies
 
