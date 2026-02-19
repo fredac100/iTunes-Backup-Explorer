@@ -694,9 +694,16 @@ public class WindowController {
                                 int logPct = pct / 5 * 5;
                                 boolean shouldLog = logPct > lastLoggedPct[0] && logPct % 5 == 0;
                                 if (shouldLog) lastLoggedPct[0] = logPct;
-                                String logEntry = shouldLog
-                                        ? "[" + elapsed + "] " + pct + "% - " + transferredText.replace("Transferred: ", "").replace("Progress: ", "") + "\n"
-                                        : null;
+                                String logLine = null;
+                                if (shouldLog) {
+                                    if (finalEstimatedTotalBytes > 0) {
+                                        long transferred = (long) (pctFloat / 100.0 * finalEstimatedTotalBytes);
+                                        logLine = pct + "% completed — " + formatSize(transferred) + " transferred (" + elapsed + " elapsed)\n";
+                                    } else {
+                                        logLine = pct + "% completed (" + elapsed + " elapsed)\n";
+                                    }
+                                }
+                                String logEntry = logLine;
 
                                 Platform.runLater(() -> {
                                     progressBar.setProgress(pct / 100.0);
@@ -936,17 +943,17 @@ public class WindowController {
     }
 
     private static String formatSize(long bytes) {
-        if (bytes >= 1024L * 1024 * 1024) return String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024));
-        if (bytes >= 1024L * 1024) return String.format("%.1f MB", bytes / (1024.0 * 1024));
-        if (bytes >= 1024L) return String.format("%.1f KB", bytes / 1024.0);
+        if (bytes >= 1024L * 1024 * 1024) return String.format(java.util.Locale.ROOT, "%.1f GB", bytes / (1024.0 * 1024 * 1024));
+        if (bytes >= 1024L * 1024) return String.format(java.util.Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024));
+        if (bytes >= 1024L) return String.format(java.util.Locale.ROOT, "%.1f KB", bytes / 1024.0);
         return bytes + " B";
     }
 
     private static String formatSpeed(double bytesPerSec) {
-        if (bytesPerSec >= 1024 * 1024 * 1024) return String.format("%.1f GB/s", bytesPerSec / (1024 * 1024 * 1024));
-        if (bytesPerSec >= 1024 * 1024) return String.format("%.1f MB/s", bytesPerSec / (1024 * 1024));
-        if (bytesPerSec >= 1024) return String.format("%.1f KB/s", bytesPerSec / 1024);
-        return String.format("%.0f B/s", bytesPerSec);
+        if (bytesPerSec >= 1024 * 1024 * 1024) return String.format(java.util.Locale.ROOT, "%.1f GB/s", bytesPerSec / (1024 * 1024 * 1024));
+        if (bytesPerSec >= 1024 * 1024) return String.format(java.util.Locale.ROOT, "%.1f MB/s", bytesPerSec / (1024 * 1024));
+        if (bytesPerSec >= 1024) return String.format(java.util.Locale.ROOT, "%.1f KB/s", bytesPerSec / 1024);
+        return String.format(java.util.Locale.ROOT, "%.0f B/s", bytesPerSec);
     }
 
     private static String formatDuration(long totalSeconds) {
