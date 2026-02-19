@@ -56,7 +56,6 @@ public class WhatsAppDatabaseService implements AutoCloseable {
     public List<WhatsAppChat> queryChats() throws SQLException {
         List<WhatsAppChat> chats = new ArrayList<>();
 
-        boolean hasMessageCounter = sessionColumns.contains("ZMESSAGECOUNTER");
         boolean hasPushName = messageColumns.contains("ZPUSHNAME");
         boolean hasChatSession = messageColumns.contains("ZCHATSESSION");
 
@@ -64,10 +63,10 @@ public class WhatsAppDatabaseService implements AutoCloseable {
         sql.append("SELECT cs.Z_PK, cs.ZCONTACTJID, cs.ZPARTNERNAME, cs.ZSESSIONTYPE, ");
         sql.append("cs.ZLASTMESSAGEDATE");
 
-        if (hasMessageCounter) {
-            sql.append(", cs.ZMESSAGECOUNTER");
-        } else if (hasChatSession) {
-            sql.append(", (SELECT COUNT(*) FROM ZWAMESSAGE m WHERE m.ZCHATSESSION = cs.Z_PK) AS ZMESSAGECOUNTER");
+        if (hasChatSession) {
+            sql.append(", (SELECT COUNT(*) FROM ZWAMESSAGE m WHERE m.ZCHATSESSION = cs.Z_PK) AS totalMessageCount");
+        } else {
+            sql.append(", COALESCE(cs.ZMESSAGECOUNTER, 0) AS totalMessageCount");
         }
 
         if (hasChatSession) {
@@ -83,7 +82,7 @@ public class WhatsAppDatabaseService implements AutoCloseable {
         }
 
         sql.append(" FROM ZWACHATSESSION cs ");
-        sql.append("WHERE cs.ZCONTACTJID IS NOT NULL AND cs.ZCONTACTJID != '' ");
+        sql.append("WHERE (cs.ZCONTACTJID IS NOT NULL AND cs.ZCONTACTJID != '') OR cs.ZSESSIONTYPE = 1 ");
         sql.append("ORDER BY cs.ZLASTMESSAGEDATE DESC");
 
         logger.debug("Chats query: {}", sql);
@@ -91,7 +90,7 @@ public class WhatsAppDatabaseService implements AutoCloseable {
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(sql.toString())) {
             while (rs.next()) {
-                int msgCount = (hasMessageCounter || hasChatSession) ? rs.getInt("ZMESSAGECOUNTER") : 0;
+                int msgCount = rs.getInt("totalMessageCount");
                 String lastMsg = hasChatSession ? rs.getString("ZLASTMESSAGETEXT") : null;
 
                 chats.add(new WhatsAppChat(

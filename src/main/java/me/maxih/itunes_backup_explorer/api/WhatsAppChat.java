@@ -13,7 +13,11 @@ public record WhatsAppChat(
         String latestPushName
 ) {
     public boolean isGroup() {
-        return (contactJid != null && contactJid.contains("@g.us")) || sessionType == 1;
+        if (contactJid != null) {
+            String jidLower = contactJid.toLowerCase(java.util.Locale.ROOT);
+            if (jidLower.contains("@g.us") || jidLower.contains("@newsletter")) return true;
+        }
+        return sessionType == 1;
     }
 
     public String displayName() {

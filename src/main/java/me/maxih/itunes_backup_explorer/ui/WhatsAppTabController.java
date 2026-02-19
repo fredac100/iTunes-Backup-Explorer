@@ -323,6 +323,9 @@ public class WhatsAppTabController {
             }
         } else if (hasMedia && msg.media().localPath() != null) {
             Image thumbImage = loadThumbnail(msg.media().localPath());
+            if (thumbImage == null && isImageType(msg)) {
+                thumbImage = loadMediaFile(msg.media().localPath());
+            }
             if (thumbImage != null) {
                 ImageView iv = new ImageView(thumbImage);
                 iv.setFitWidth(200);
@@ -441,6 +444,50 @@ public class WhatsAppTabController {
             }
         } catch (Exception e) {
             logger.debug("Failed to load thumbnail for {}", mediaLocalPath, e);
+        }
+        return null;
+    }
+
+    private boolean isImageType(WhatsAppMessage msg) {
+        return msg.messageType() == 1 ||
+            (msg.media() != null && msg.media().mimeType() != null && msg.media().mimeType().startsWith("image/"));
+    }
+
+    private Image loadMediaFile(String localPath) {
+        if (localPath == null || selectedBackup == null || whatsappDomain == null || thumbnailCacheDir == null)
+            return null;
+
+        String cacheKey = "media:" + localPath;
+        Image cached = thumbnailCache.get(cacheKey);
+        if (cached != null) return cached;
+
+        String[] patterns = {
+            "Message/" + localPath,
+            localPath
+        };
+
+        for (String pattern : patterns) {
+            try {
+                List<BackupFile> results = selectedBackup.searchFiles(whatsappDomain, pattern);
+                BackupFile mediaFile = results.stream()
+                    .filter(f -> f.getFileType() == BackupFile.FileType.FILE)
+                    .findFirst()
+                    .orElse(null);
+
+                if (mediaFile != null) {
+                    File tempFile = new File(thumbnailCacheDir, "media_" + mediaFile.fileID);
+                    if (!tempFile.exists()) {
+                        mediaFile.extract(tempFile);
+                    }
+                    Image image = new Image(tempFile.toURI().toString(), 200, 0, true, true);
+                    if (!image.isError()) {
+                        thumbnailCache.put(cacheKey, image);
+                        return image;
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("Failed to load media file {}", localPath, e);
+            }
         }
         return null;
     }
@@ -650,7 +697,16 @@ public class WhatsAppTabController {
 
                 String preview = chat.lastMessagePreview();
                 previewLabel.setText(preview != null ? truncate(preview, 60) : "");
-                badgeLabel.setText(String.valueOf(chat.messageCount()));
+                int count = chat.messageCount();
+                if (count > 0) {
+                    badgeLabel.setText(String.valueOf(count));
+                    badgeLabel.setVisible(true);
+                    badgeLabel.setManaged(true);
+                } else {
+                    badgeLabel.setText("");
+                    badgeLabel.setVisible(false);
+                    badgeLabel.setManaged(false);
+                }
 
                 setGraphic(container);
             }
