@@ -162,17 +162,31 @@ public class MirrorService {
 
         Thread thread = new Thread(() -> {
             if (!isTunneldRunning()) {
-                logger.info("Tunneld not detected, starting via pkexec...");
+                String cli = DeviceService.activeCli();
                 try {
-                    new ProcessBuilder(
-                            "pkexec",
-                            DeviceService.activeCli(),
-                            "remote", "tunneld", "--protocol", "tcp", "--daemonize"
-                    ).start();
+                    if (DeviceService.isWindows()) {
+                        logger.info("Tunneld not detected, starting via PowerShell elevation...");
+                        new ProcessBuilder(
+                                "powershell", "-Command",
+                                "Start-Process -Verb RunAs -WindowStyle Hidden -FilePath '"
+                                        + cli + "' -ArgumentList 'remote tunneld --protocol tcp'"
+                        ).start();
+                    } else {
+                        logger.info("Tunneld not detected, starting via pkexec...");
+                        new ProcessBuilder(
+                                "pkexec", cli,
+                                "remote", "tunneld", "--protocol", "tcp", "--daemonize"
+                        ).start();
+                    }
                 } catch (IOException e) {
                     logger.warn("Failed to start tunnel: {}", e.getMessage());
-                    errorMessage = "Could not start tunnel. Run manually:\nsudo "
-                            + DeviceService.activeCli() + " remote tunneld --protocol tcp --daemonize";
+                    if (DeviceService.isWindows()) {
+                        errorMessage = "Could not start tunnel. Run as Administrator:\n"
+                                + cli + " remote tunneld --protocol tcp --daemonize";
+                    } else {
+                        errorMessage = "Could not start tunnel. Run manually:\nsudo "
+                                + cli + " remote tunneld --protocol tcp --daemonize";
+                    }
                     setState(State.ERROR);
                     return;
                 }
@@ -189,9 +203,15 @@ public class MirrorService {
                 }
 
                 if (!isTunneldRunning()) {
-                    errorMessage = "Tunneld did not start. Check that you authenticated correctly.\n"
-                            + "Run manually: sudo " + DeviceService.activeCli()
-                            + " remote tunneld --protocol tcp --daemonize";
+                    if (DeviceService.isWindows()) {
+                        errorMessage = "Tunneld did not start. Accept the admin prompt and try again.\n"
+                                + "Or run as Administrator: " + cli
+                                + " remote tunneld --protocol tcp --daemonize";
+                    } else {
+                        errorMessage = "Tunneld did not start. Check that you authenticated correctly.\n"
+                                + "Run manually: sudo " + cli
+                                + " remote tunneld --protocol tcp --daemonize";
+                    }
                     setState(State.ERROR);
                     return;
                 }
@@ -230,6 +250,45 @@ public class MirrorService {
 
     public void setup(Consumer<String> progressLog, Runnable onDone, Consumer<String> onError) {
         DeviceService.setupPymobiledevice3(progressLog, onDone, onError);
+    }
+
+    public boolean isUxplayAvailable() {
+        if (!DeviceService.isWindows()) return true; // Linux: assume installed or will fail clearly
+        return resolveUxplayPath() != null;
+    }
+
+    private static String resolveUxplayPath() {
+        // Check common install locations
+        String[] candidates = {
+                System.getenv("ProgramFiles") + "\\uxplay-windows\\uxplay.exe",
+                System.getenv("ProgramFiles(x86)") + "\\uxplay-windows\\uxplay.exe",
+                System.getenv("LOCALAPPDATA") + "\\Programs\\uxplay-windows\\uxplay.exe",
+        };
+        for (String path : candidates) {
+            if (path != null && Files.isExecutable(Path.of(path))) {
+                return path;
+            }
+        }
+        // Check PATH
+        try {
+            Process p = new ProcessBuilder("where", "uxplay").redirectErrorStream(true).start();
+            String output = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+            if (p.waitFor(5, TimeUnit.SECONDS) && p.exitValue() == 0 && !output.isEmpty()) {
+                return output.lines().findFirst().orElse(null);
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private static final String UXPLAY_DOWNLOAD_URL = "https://github.com/leapbtw/uxplay-windows/releases/latest";
+
+    public void openUxplayDownloadPage() {
+        try {
+            java.awt.Desktop.getDesktop().browse(java.net.URI.create(UXPLAY_DOWNLOAD_URL));
+        } catch (Exception e) {
+            logger.warn("Failed to open browser: {}", e.getMessage());
+        }
     }
 
     public void startAirPlay(Consumer<State> stateListenerArg, Consumer<byte[]> frameListener) {
@@ -432,7 +491,13 @@ public class MirrorService {
 
     private void killUxplay() {
         try {
-            new ProcessBuilder("pkill", "-9", "-f", "uxplay").start().waitFor(5, TimeUnit.SECONDS);
+            if (DeviceService.isWindows()) {
+                new ProcessBuilder("taskkill", "/F", "/IM", "uxplay.exe")
+                        .redirectErrorStream(true).start().waitFor(5, TimeUnit.SECONDS);
+            } else {
+                new ProcessBuilder("pkill", "-9", "-f", "uxplay")
+                        .start().waitFor(5, TimeUnit.SECONDS);
+            }
         } catch (Exception ignored) {
         }
     }

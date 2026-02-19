@@ -19,10 +19,7 @@
         <VBox fx:id="noDevicePane" alignment="CENTER" spacing="12" styleClass="device-no-device" visible="false" managed="false">
             <Label text="No device connected" styleClass="welcome-title"/>
             <Label text="Connect an iPhone via USB to mirror its screen" styleClass="welcome-subtitle" wrapText="true"/>
-            <Separator maxWidth="300"/>
-            <Label text="Or mirror via AirPlay (Wi-Fi):" styleClass="welcome-subtitle" wrapText="true"/>
-            <Button text="Start AirPlay" onAction="#onAirPlayClicked"/>
-            <Label text="On iPhone: Control Center > Screen Mirroring > select 'Mirror'" styleClass="info-label" wrapText="true" textAlignment="CENTER" maxWidth="400" style="-fx-text-fill: #888;"/>
+            <!-- AirPlay temporarily disabled -->
         </VBox>
 
         <VBox fx:id="developerModePane" alignment="CENTER" spacing="16" styleClass="device-no-device" visible="false" managed="false">
@@ -84,7 +81,7 @@
                 <Label fx:id="fpsLabel" styleClass="info-label"/>
                 <Region HBox.hgrow="ALWAYS"/>
                 <Label fx:id="wdaStatusLabel" styleClass="info-label"/>
-                <Button fx:id="airPlayButton" text="AirPlay" onAction="#onAirPlayClicked"/>
+                <Button fx:id="airPlayButton" text="AirPlay" onAction="#onAirPlayClicked" visible="false" managed="false"/>
                 <Button fx:id="startStopButton" text="Stop" onAction="#onStartStopClicked"/>
             </HBox>
 

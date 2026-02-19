@@ -137,6 +137,19 @@ public class MirrorTabController {
     @FXML
     private void onAirPlayClicked() {
         if (streaming) return;
+        if (!mirrorService.isUxplayAvailable()) {
+            Optional<ButtonType> result = Dialogs.showAlert(
+                    Alert.AlertType.INFORMATION,
+                    "AirPlay requires uxplay-windows to be installed.\n\n"
+                            + "Click OK to open the download page.\n"
+                            + "After installing, click AirPlay again.",
+                    ButtonType.OK, ButtonType.CANCEL
+            );
+            if (result.isPresent() && result.get() == ButtonType.OK) {
+                mirrorService.openUxplayDownloadPage();
+            }
+            return;
+        }
         streaming = true;
         airPlayButton.setDisable(true);
         showPane("view");

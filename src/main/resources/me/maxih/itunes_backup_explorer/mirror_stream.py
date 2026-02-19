@@ -12,9 +12,14 @@ import threading
 import queue as _queue
 import signal
 import atexit
-import select
+import socket as _socket
 
 logging.disable(logging.CRITICAL)
+
+IS_WINDOWS = sys.platform == 'win32'
+
+if not IS_WINDOWS:
+    import select
 
 _active_uxplay: subprocess.Popen | None = None
 
@@ -32,7 +37,8 @@ def _cleanup_uxplay():
 
 
 atexit.register(_cleanup_uxplay)
-signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+if not IS_WINDOWS:
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
 try:
     from pymobiledevice3.lockdown import create_using_usbmux
@@ -149,29 +155,53 @@ def parse_jpeg_dimensions(data: bytes) -> tuple[int, int]:
     return 0, 0
 
 
+def _find_uxplay() -> str:
+    """Find the uxplay executable, checking install directories on Windows."""
+    if not IS_WINDOWS:
+        return "uxplay"
+    import shutil
+    if shutil.which("uxplay"):
+        return "uxplay"
+    candidates = []
+    for env_var in ("ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"):
+        base = os.environ.get(env_var, "")
+        if base:
+            candidates.append(os.path.join(base, "uxplay-windows", "uxplay.exe"))
+            candidates.append(os.path.join(base, "Programs", "uxplay-windows", "uxplay.exe"))
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return "uxplay"
+
+
 def _kill_uxplay() -> None:
-    subprocess.run(["pkill", "-9", "-f", "uxplay"], capture_output=True)
+    if IS_WINDOWS:
+        subprocess.run(["taskkill", "/F", "/IM", "uxplay.exe"],
+                       capture_output=True)
+    else:
+        subprocess.run(["pkill", "-9", "-f", "uxplay"], capture_output=True)
     time.sleep(0.5)
 
 
 def _wait_uxplay_listening(port: int = 7000, timeout: float = 10.0) -> bool:
-    import socket
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            with socket.create_connection(('127.0.0.1', port), timeout=0.5) as s:
+            with _socket.create_connection(('127.0.0.1', port), timeout=0.5) as s:
                 return True
         except (ConnectionRefusedError, OSError, TimeoutError):
             time.sleep(0.3)
     return False
 
 
-def _launch_uxplay(w_fd: int) -> subprocess.Popen:
+def _launch_uxplay_pipe(w_fd: int) -> subprocess.Popen:
+    """Launch uxplay using pipe fd (Linux/macOS)."""
     global _active_uxplay
+    uxplay = _find_uxplay()
     vc = "videoconvert ! jpegenc quality=70"
     vs = f"fdsink fd={w_fd} sync=false"
     proc = subprocess.Popen(
-        ["uxplay", "-nh", "-n", "Mirror", "-p", "7000",
+        [uxplay, "-nh", "-n", "Mirror", "-p", "7000",
          "-vc", vc, "-vs", vs, "-as", "0"],
         stderr=subprocess.PIPE,
         stdout=subprocess.DEVNULL,
@@ -181,8 +211,25 @@ def _launch_uxplay(w_fd: int) -> subprocess.Popen:
     return proc
 
 
-def _read_airplay_frames(proc: subprocess.Popen, r_fd: int,
-                         connect_timeout: float = 10.0) -> int:
+def _launch_uxplay_tcp(tcp_port: int) -> subprocess.Popen:
+    """Launch uxplay using TCP socket (Windows)."""
+    global _active_uxplay
+    uxplay = _find_uxplay()
+    vc = "videoconvert ! jpegenc quality=70"
+    vs = f"tcpclientsink host=127.0.0.1 port={tcp_port}"
+    proc = subprocess.Popen(
+        [uxplay, "-nh", "-n", "Mirror", "-p", "7000",
+         "-vc", vc, "-vs", vs, "-as", "0"],
+        stderr=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
+    )
+    _active_uxplay = proc
+    return proc
+
+
+def _read_airplay_frames_fd(proc: subprocess.Popen, r_fd: int,
+                            connect_timeout: float = 10.0) -> int:
+    """Read frames from a pipe file descriptor (Linux/macOS)."""
     uxplay_error = []
 
     def monitor_stderr():
@@ -254,9 +301,88 @@ def _read_airplay_frames(proc: subprocess.Popen, r_fd: int,
     return frame_count
 
 
+def _read_airplay_frames_socket(proc: subprocess.Popen, conn: _socket.socket,
+                                connect_timeout: float = 10.0) -> int:
+    """Read frames from a TCP socket (Windows)."""
+    uxplay_error = []
+
+    def monitor_stderr():
+        try:
+            for raw_line in proc.stderr:
+                text = raw_line.decode('utf-8', errors='replace').strip()
+                if text:
+                    print(f"INFO: uxplay: {text}", file=sys.stderr, flush=True)
+                    if "ERROR" in text or "error" in text:
+                        uxplay_error.append(text)
+        except Exception:
+            pass
+
+    stderr_thread = threading.Thread(target=monitor_stderr, daemon=True)
+    stderr_thread.start()
+
+    frame_count = 0
+    cached_w, cached_h = 0, 0
+    buf = b''
+
+    try:
+        while True:
+            if proc.poll() is not None and not buf:
+                break
+
+            timeout = connect_timeout if frame_count == 0 else 5.0
+            conn.settimeout(timeout)
+            try:
+                chunk = conn.recv(131072)
+            except _socket.timeout:
+                if frame_count == 0:
+                    print(f"INFO: Timeout de {connect_timeout}s aguardando conexão AirPlay",
+                          file=sys.stderr, flush=True)
+                break
+            except OSError:
+                break
+            if not chunk:
+                break
+
+            buf += chunk
+
+            while True:
+                soi = buf.find(b'\xff\xd8')
+                if soi == -1:
+                    buf = b''
+                    break
+                if soi > 0:
+                    buf = buf[soi:]
+
+                eoi = buf.find(b'\xff\xd9', 2)
+                if eoi == -1:
+                    break
+
+                frame = buf[:eoi + 2]
+                buf = buf[eoi + 2:]
+
+                if cached_w == 0:
+                    cached_w, cached_h = parse_jpeg_dimensions(frame)
+
+                write_frame(frame, cached_w, cached_h)
+                frame_count += 1
+    except (BrokenPipeError, KeyboardInterrupt):
+        pass
+
+    if frame_count == 0 and uxplay_error:
+        print(f"INFO: uxplay reportou erros: {'; '.join(uxplay_error)}", file=sys.stderr, flush=True)
+
+    return frame_count
+
+
 def stream_airplay() -> None:
     MAX_RETRIES = 5
     RETRY_DELAY = 1
+
+    uxplay_not_found_msg = (
+        "MIRROR_ERROR: uxplay não encontrado. "
+        + ("Instale uxplay-windows: https://github.com/leapbtw/uxplay-windows"
+           if IS_WINDOWS else "Instale com: sudo apt install uxplay")
+    )
 
     for attempt in range(1, MAX_RETRIES + 1):
         print(f"INFO: Iniciando servidor AirPlay via uxplay (tentativa {attempt}/{MAX_RETRIES})...",
@@ -264,18 +390,36 @@ def stream_airplay() -> None:
 
         _kill_uxplay()
 
-        r_fd, w_fd = os.pipe()
+        # Setup communication channel
+        r_fd = None
+        w_fd = None
+        srv_sock = None
+        conn_sock = None
+
+        if IS_WINDOWS:
+            srv_sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+            srv_sock.bind(('127.0.0.1', 0))
+            tcp_port = srv_sock.getsockname()[1]
+            srv_sock.listen(1)
+        else:
+            r_fd, w_fd = os.pipe()
 
         try:
-            proc = _launch_uxplay(w_fd)
+            if IS_WINDOWS:
+                proc = _launch_uxplay_tcp(tcp_port)
+            else:
+                proc = _launch_uxplay_pipe(w_fd)
         except FileNotFoundError:
-            print("MIRROR_ERROR: uxplay não encontrado. Instale com: sudo apt install uxplay",
-                  file=sys.stderr, flush=True)
-            os.close(r_fd)
-            os.close(w_fd)
+            print(uxplay_not_found_msg, file=sys.stderr, flush=True)
+            if IS_WINDOWS:
+                srv_sock.close()
+            else:
+                os.close(r_fd)
+                os.close(w_fd)
             sys.exit(1)
 
-        os.close(w_fd)
+        if not IS_WINDOWS:
+            os.close(w_fd)
 
         time.sleep(1.0)
         if proc.poll() is not None:
@@ -284,12 +428,20 @@ def stream_airplay() -> None:
                 err = proc.stderr.read().decode('utf-8', errors='replace').strip()
             except Exception:
                 pass
-            os.close(r_fd)
+            if IS_WINDOWS:
+                srv_sock.close()
+            else:
+                os.close(r_fd)
 
             if "DNS-SD" in err or "DNSService" in err:
-                print("MIRROR_ERROR: Serviço DNS-SD (Avahi) não está rodando. "
-                      "Execute: sudo systemctl start avahi-daemon",
-                      file=sys.stderr, flush=True)
+                if IS_WINDOWS:
+                    print("MIRROR_ERROR: Serviço Bonjour não está rodando. "
+                          "Instale o iTunes ou Bonjour Print Services da Apple.",
+                          file=sys.stderr, flush=True)
+                else:
+                    print("MIRROR_ERROR: Serviço DNS-SD (Avahi) não está rodando. "
+                          "Execute: sudo systemctl start avahi-daemon",
+                          file=sys.stderr, flush=True)
                 sys.exit(1)
 
             if attempt < MAX_RETRIES:
@@ -306,7 +458,10 @@ def stream_airplay() -> None:
             print("INFO: uxplay não abriu a porta 7000 a tempo",
                   file=sys.stderr, flush=True)
             _cleanup_uxplay()
-            os.close(r_fd)
+            if IS_WINDOWS:
+                srv_sock.close()
+            else:
+                os.close(r_fd)
             if attempt < MAX_RETRIES:
                 time.sleep(RETRY_DELAY)
                 continue
@@ -314,19 +469,49 @@ def stream_airplay() -> None:
                   file=sys.stderr, flush=True)
             sys.exit(1)
 
+        # On Windows, accept the TCP connection from uxplay
+        if IS_WINDOWS:
+            try:
+                srv_sock.settimeout(15.0)
+                conn_sock, _ = srv_sock.accept()
+                srv_sock.close()
+                srv_sock = None
+            except _socket.timeout:
+                print("INFO: uxplay não conectou ao socket TCP a tempo",
+                      file=sys.stderr, flush=True)
+                _cleanup_uxplay()
+                if srv_sock:
+                    srv_sock.close()
+                if attempt < MAX_RETRIES:
+                    time.sleep(RETRY_DELAY)
+                    continue
+                print("MIRROR_ERROR: uxplay falhou ao conectar ao socket de vídeo",
+                      file=sys.stderr, flush=True)
+                sys.exit(1)
+
         time.sleep(1.5)
         print("MIRROR_AIRPLAY_READY", file=sys.stderr, flush=True)
 
         try:
-            frame_count = _read_airplay_frames(proc, r_fd)
+            if IS_WINDOWS:
+                frame_count = _read_airplay_frames_socket(proc, conn_sock)
+            else:
+                frame_count = _read_airplay_frames_fd(proc, r_fd)
         except Exception as e:
             print(f"INFO: Exceção em _read_airplay_frames: {e}", file=sys.stderr, flush=True)
             frame_count = 0
 
-        try:
-            os.close(r_fd)
-        except OSError:
-            pass
+        if IS_WINDOWS:
+            if conn_sock:
+                try:
+                    conn_sock.close()
+                except OSError:
+                    pass
+        else:
+            try:
+                os.close(r_fd)
+            except OSError:
+                pass
         _cleanup_uxplay()
 
         if frame_count > 0:
@@ -426,7 +611,8 @@ def try_screenshot_service(lockdown, udid=None) -> bool:
 
 def try_auto_mount(udid: str) -> bool:
     venv_bin = os.path.dirname(sys.executable)
-    pmd3 = os.path.join(venv_bin, "pymobiledevice3")
+    exe_name = "pymobiledevice3.exe" if IS_WINDOWS else "pymobiledevice3"
+    pmd3 = os.path.join(venv_bin, exe_name)
 
     if not os.path.isfile(pmd3):
         return False
