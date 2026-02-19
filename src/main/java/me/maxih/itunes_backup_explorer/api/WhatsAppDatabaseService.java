@@ -58,6 +58,9 @@ public class WhatsAppDatabaseService implements AutoCloseable {
 
         boolean hasPushName = messageColumns.contains("ZPUSHNAME");
         boolean hasChatSession = messageColumns.contains("ZCHATSESSION");
+        boolean hasMessageCounter = sessionColumns.contains("ZMESSAGECOUNTER");
+
+        logDatabaseStats(hasChatSession);
 
         StringBuilder sql = new StringBuilder();
         sql.append("SELECT cs.Z_PK, cs.ZCONTACTJID, cs.ZPARTNERNAME, cs.ZSESSIONTYPE, ");
@@ -65,8 +68,10 @@ public class WhatsAppDatabaseService implements AutoCloseable {
 
         if (hasChatSession) {
             sql.append(", (SELECT COUNT(*) FROM ZWAMESSAGE m WHERE m.ZCHATSESSION = cs.Z_PK) AS totalMessageCount");
-        } else {
+        } else if (hasMessageCounter) {
             sql.append(", COALESCE(cs.ZMESSAGECOUNTER, 0) AS totalMessageCount");
+        } else {
+            sql.append(", 0 AS totalMessageCount");
         }
 
         if (hasChatSession) {
@@ -82,11 +87,7 @@ public class WhatsAppDatabaseService implements AutoCloseable {
         }
 
         sql.append(" FROM ZWACHATSESSION cs ");
-        if (hasChatSession) {
-            sql.append("WHERE EXISTS (SELECT 1 FROM ZWAMESSAGE m WHERE m.ZCHATSESSION = cs.Z_PK) ");
-        } else {
-            sql.append("WHERE COALESCE(cs.ZMESSAGECOUNTER, 0) > 0 ");
-        }
+        sql.append("WHERE (cs.ZCONTACTJID IS NOT NULL AND cs.ZCONTACTJID != '') OR cs.ZSESSIONTYPE = 1 ");
         sql.append("ORDER BY cs.ZLASTMESSAGEDATE DESC");
 
         logger.debug("Chats query: {}", sql);
@@ -193,6 +194,39 @@ public class WhatsAppDatabaseService implements AutoCloseable {
         logger.debug("queryMessages(chatSession={}, limit={}, offset={}) returned {} messages",
                 chatSessionId, limit, offset, messages.size());
         return messages;
+    }
+
+    private void logDatabaseStats(boolean hasChatSession) {
+        try (Statement stmt = connection.createStatement()) {
+            int totalSessions = 0;
+            try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM ZWACHATSESSION")) {
+                if (rs.next()) totalSessions = rs.getInt(1);
+            }
+
+            int sessionsWithJid = 0;
+            try (ResultSet rs = stmt.executeQuery(
+                    "SELECT COUNT(*) FROM ZWACHATSESSION WHERE ZCONTACTJID IS NOT NULL AND ZCONTACTJID != ''")) {
+                if (rs.next()) sessionsWithJid = rs.getInt(1);
+            }
+
+            if (hasChatSession) {
+                int sessionsWithMessages = 0;
+                try (ResultSet rs = stmt.executeQuery("SELECT COUNT(DISTINCT ZCHATSESSION) FROM ZWAMESSAGE")) {
+                    if (rs.next()) sessionsWithMessages = rs.getInt(1);
+                }
+                int totalMessages = 0;
+                try (ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM ZWAMESSAGE")) {
+                    if (rs.next()) totalMessages = rs.getInt(1);
+                }
+                logger.info("WhatsApp DB stats: {} total sessions, {} with JID, {} with messages, {} total messages",
+                        totalSessions, sessionsWithJid, sessionsWithMessages, totalMessages);
+            } else {
+                logger.info("WhatsApp DB stats: {} total sessions, {} with JID (no ZCHATSESSION column in ZWAMESSAGE)",
+                        totalSessions, sessionsWithJid);
+            }
+        } catch (SQLException e) {
+            logger.warn("Failed to log database stats", e);
+        }
     }
 
     public int countMessages(long chatSessionId) throws SQLException {

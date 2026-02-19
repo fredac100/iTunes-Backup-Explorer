@@ -116,8 +116,8 @@ public class WhatsAppTabController {
                         .filter(f -> f.relativePath.endsWith("ChatStorage.sqlite"))
                         .collect(Collectors.toList());
 
-                logger.info("Found {} ChatStorage.sqlite candidates: {}", chatDbs.size(),
-                        chatDbs.stream().map(f -> f.domain).collect(Collectors.joining(", ")));
+                logger.info("Found {} ChatStorage.sqlite candidates: {}",
+                        chatDbs.size(), chatDbs.stream().map(f -> f.domain).collect(Collectors.joining(", ")));
 
                 // Prefer regular WhatsApp over WhatsApp Business (SMB)
                 BackupFile chatStorageFile = chatDbs.stream()
