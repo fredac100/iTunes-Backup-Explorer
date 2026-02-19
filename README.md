@@ -27,6 +27,29 @@
 
 iTunes Backup Explorer is a **free, open-source desktop app** that lets you browse and manage iPhone backups on any platform. It also connects to your iPhone for real-time screen mirroring, device management, and full backup creation. No cloud, no subscriptions, no data collection.
 
+### Quick start
+
+```bash
+git clone https://github.com/fredac100/iTunes-Backup-Explorer.git
+cd iTunes-Backup-Explorer
+```
+
+**Windows:**
+```
+compile.bat
+run.bat
+```
+
+**Linux/macOS:**
+```bash
+./compile.sh
+./run.sh
+```
+
+`compile` builds the fat JAR (required on first run). `run` launches the app.
+
+> Requires **JDK 18+** and **Apache Maven**.
+
 | What you get | How it works |
 |---|---|
 | **USB screen mirroring** | See your iPhone screen in real time via USB with interactive touch |
