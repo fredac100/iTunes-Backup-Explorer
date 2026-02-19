@@ -54,8 +54,8 @@ try:
 except ImportError:
     HAS_PILLOW = False
 
-JPEG_QUALITY = 65
-MAX_LONG_SIDE = 1280
+JPEG_QUALITY = 50
+MAX_LONG_SIDE = 960
 
 
 def optimize_frame(raw_data: bytes) -> tuple[bytes, int, int]:
@@ -72,7 +72,7 @@ def optimize_frame(raw_data: bytes) -> tuple[bytes, int, int]:
     long_side = max(orig_w, orig_h)
     if long_side > MAX_LONG_SIDE:
         scale = MAX_LONG_SIDE / long_side
-        img = img.resize((int(orig_w * scale), int(orig_h * scale)), PILImage.BILINEAR)
+        img = img.resize((int(orig_w * scale), int(orig_h * scale)), PILImage.NEAREST)
 
     if img.mode != 'RGB':
         img = img.convert('RGB')
@@ -534,7 +534,8 @@ def _start_capture_worker(fq, capture_fn, label="primary"):
         while True:
             try:
                 raw = capture_fn()
-                fq.put(raw)
+                data, w, h = optimize_frame(raw)
+                fq.put((data, w, h))
             except (ConnectionError, BrokenPipeError, OSError) as e:
                 print(f"MIRROR_ERROR: Dispositivo desconectado ({label}): {e}", file=sys.stderr, flush=True)
                 fq.put(None)
@@ -554,29 +555,29 @@ def _start_capture_worker(fq, capture_fn, label="primary"):
 def _consume_frames(fq) -> None:
     try:
         while True:
-            raw = fq.get()
-            if raw is None:
+            item = fq.get()
+            if item is None:
                 sys.exit(1)
             while not fq.empty():
                 try:
                     latest = fq.get_nowait()
                     if latest is None:
                         sys.exit(1)
-                    raw = latest
+                    item = latest
                 except _queue.Empty:
                     break
-            data, w, h = optimize_frame(raw)
+            data, w, h = item
             write_frame(data, w, h)
     except KeyboardInterrupt:
         sys.exit(0)
 
 
 def screenshot_loop(screenshot_service, udid=None) -> None:
-    fq = _queue.Queue()
+    fq = _queue.Queue(maxsize=8)
     _start_capture_worker(fq, screenshot_service.take_screenshot, "worker-1")
 
     if udid and USE_PYMOBILEDEVICE3:
-        for i in range(2):
+        for i in range(3):
             try:
                 lockdown = create_using_usbmux(serial=udid)
                 ss = ScreenshotService(lockdown=lockdown)

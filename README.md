@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="#airplay-screen-mirroring">AirPlay Mirror</a> •
+  <a href="#screen-mirroring">Screen Mirroring</a> •
   <a href="#media-gallery">Media Gallery</a> •
   <a href="#device-control">Device Control</a> •
   <a href="#backup-explorer">Backup Explorer</a> •
@@ -25,13 +25,14 @@
 
 ## What is iTunes Backup Explorer?
 
-iTunes Backup Explorer is a **free, open-source desktop app** that lets you browse and manage iPhone backups on any platform. It also connects to your iPhone for real-time interaction and full backup management. No cloud, no subscriptions, no data collection.
+iTunes Backup Explorer is a **free, open-source desktop app** that lets you browse and manage iPhone backups on any platform. It also connects to your iPhone for real-time screen mirroring, device management, and full backup creation. No cloud, no subscriptions, no data collection.
 
 | What you get | How it works |
 |---|---|
-| **Wireless screen mirroring** | AirPlay streaming with low latency — no cable needed |
+| **USB screen mirroring** | See your iPhone screen in real time via USB with interactive touch |
 | **Full media gallery** | Browse your photos and videos with real thumbnails, not just file names |
 | **Live device control** | Battery, storage, apps, screenshots, power controls — all via USB |
+| **Backup creation** | Create full iPhone backups with progress, speed, and ETA |
 | **Encrypted backup support** | AES-256 decryption with Apple's KeyBag system |
 | **Offline by design** | Zero network access — your data stays on your machine |
 
@@ -39,27 +40,28 @@ iTunes Backup Explorer is a **free, open-source desktop app** that lets you brow
 
 ## Key Features
 
-### AirPlay Screen Mirroring
+### Screen Mirroring
 
 | Feature | Description |
 |---------|-------------|
-| **Wireless mirroring** | Stream your iPhone screen via AirPlay — no cable required |
-| **USB mirroring** | Alternative low-latency option via direct USB connection |
-| **Interactive touch** | Tap and swipe gestures forwarded to the device in real time |
-| **Configurable FPS** | 30 FPS default, adjustable for performance |
-| **View-only mode** | Watch without sending touch events |
-| **iOS 17+ support** | Tunnel support via `pymobiledevice3` for modern iOS versions |
+| **USB mirroring** | Real-time screen capture via direct USB connection using pymobiledevice3 |
+| **Parallel capture** | Up to 4 simultaneous USB connections for higher frame rates |
+| **Interactive touch** | Tap and swipe gestures forwarded to the device via WDA |
+| **iOS 17+ support** | Automatic tunnel setup via `tunneld` with admin elevation |
+| **View-only mode** | Watch without sending touch events (when WDA is unavailable) |
+| **AirPlay wireless** | Stream via AirPlay using uxplay (Linux only — temporarily disabled on Windows) |
 
 ### Media Gallery
 
 | Feature | Description |
 |---------|-------------|
-| **Visual grid** | Real thumbnail previews of all photos and videos — not just metadata |
+| **Visual grid** | Real 90x90px thumbnail previews with async 4-thread loading and in-memory cache |
 | **Filters** | Toggle between All / Photos / Videos |
-| **Pagination** | Smooth browsing with 100 items per page and thumbnail caching |
-| **Preview panel** | Full-size preview with file metadata and details |
-| **Bulk export** | Export individual files or the entire gallery at once |
+| **Pagination** | Smooth browsing with 100 items per page |
+| **Preview panel** | Full-size preview with filename, size, domain and path |
+| **Bulk export** | Export individual files or the entire gallery with directory structure and timestamps |
 | **Format support** | JPG, PNG, HEIC, HEIF, GIF, BMP, TIFF, MOV, MP4, M4V, AVI |
+| **Auto-setup** | On Windows, ffmpeg and ImageMagick are downloaded automatically for video/HEIC thumbnails |
 
 ### Device Control
 
@@ -70,6 +72,17 @@ iTunes Backup Explorer is a **free, open-source desktop app** that lets you brow
 | **Screenshots** | Capture your device screen directly from the app |
 | **Power controls** | Restart, shutdown, or sleep your device remotely |
 | **Storage monitor** | Visual progress bar with used/total breakdown |
+| **Dual backend** | Works via libimobiledevice (primary) or pymobiledevice3 (automatic fallback) |
+
+### Backup Creation
+
+| Feature | Description |
+|---------|-------------|
+| **Full backup** | Create complete iPhone backups via USB |
+| **Progress tracking** | Real-time progress bar, transfer speed (MB/s), ETA, bytes transferred |
+| **Two backends** | Uses `idevicebackup2` or `pymobiledevice3 backup2` (automatic fallback) |
+| **Cancellable** | Cancel at any time with full process cleanup |
+| **Auto-register** | Backup destination is automatically added to the sidebar after success |
 
 ### Backup Explorer
 
@@ -78,7 +91,7 @@ iTunes Backup Explorer is a **free, open-source desktop app** that lets you brow
 | **Auto-discovery** | Automatically finds backups from default iTunes/Finder directories |
 | **Encrypted backups** | Full AES-256 CBC decryption using Apple's KeyBag and protection class model |
 | **Hierarchical browser** | Tree view organized by domain and path with context menu actions |
-| **File search** | SQLite LIKE syntax with wildcards (`%`, `_`), sortable results, and bulk export |
+| **File search** | Full-text search with quick filters: Photos, Videos, WhatsApp, Contacts, Messages, Notes, Voice Memos |
 | **File modification** | Replace files (re-encrypted automatically), delete entries, with incremental safety backups |
 | **Drag & drop** | Load backup folders by dropping them into the app |
 | **Multiple backups** | Open and switch between several backups simultaneously via sidebar |
@@ -89,13 +102,14 @@ iTunes Backup Explorer is a **free, open-source desktop app** that lets you brow
 |---------|-------------|
 | **App list** | All apps from the backup with name, bundle ID, and version |
 | **File tree** | Expandable directory tree for each app's data |
-| **Export** | Export individual app data for analysis |
+| **Export** | Export individual app data with progress tracking |
 
 ### Security & Privacy
 
 - Decrypted database temp files are **securely zeroed out** and deleted on exit
 - All backup modifications create **incremental safety backups** before any change
 - **Path traversal protection** on file extraction
+- **char[] for passwords** with cleanup after use (not String)
 - **No internet connection** — the app is fully offline by design
 - **No data collection** — zero telemetry, zero analytics
 
@@ -127,6 +141,23 @@ iTunes Backup Explorer is a **free, open-source desktop app** that lets you brow
 
 ## Installation
 
+### Quick start
+
+```bash
+git clone https://github.com/fredac100/iTunes-Backup-Explorer.git
+cd iTunes-Backup-Explorer
+```
+
+**Windows:** double-click `run.bat`
+
+**Linux/macOS:**
+```bash
+chmod +x run.sh
+./run.sh
+```
+
+The script automatically compiles on the first run and opens the app.
+
 ### Fat JAR (any platform)
 
 ```bash
@@ -137,14 +168,19 @@ java -jar itunes-backup-explorer.jar
 
 ### Optional Dependencies
 
-These are only needed for the **Device** and **Mirror** tabs:
+These tools are only needed for specific features. **On Windows, the app downloads them automatically** when needed.
 
-| Dependency | Purpose |
-|------------|---------|
-| [libimobiledevice](https://github.com/libimobiledevice/libimobiledevice) | Device info, app listing, screenshots, power controls (USB) — available on most platforms via their package managers |
-| [pymobiledevice3](https://github.com/doronz88/pymobiledevice3) | AirPlay screen mirroring and iOS 17+ tunnel (auto-installed via in-app wizard) |
+| Dependency | Purpose | Linux | Windows |
+|------------|---------|-------|---------|
+| [libimobiledevice](https://github.com/libimobiledevice/libimobiledevice) | Device tab, USB backup | `sudo apt install libimobiledevice-utils` | Included in Apple Devices / iTunes |
+| [pymobiledevice3](https://github.com/doronz88/pymobiledevice3) | Mirror tab, device fallback, backup fallback | `pip install pymobiledevice3` | **Automatic** (downloads portable Python 3.12.8 if needed) |
+| [ffmpeg](https://ffmpeg.org/) | Video thumbnails in Media tab | `sudo apt install ffmpeg` | **Automatic** (downloaded on first need, ~85 MB) |
+| [ImageMagick](https://imagemagick.org/) | HEIC/HEIF thumbnails in Media tab | `sudo apt install imagemagick libheif1` | **Automatic** (downloaded on first need, ~50 MB) |
+| [uxplay](https://github.com/antimof/UxPlay) | AirPlay wireless mirroring | `sudo apt install uxplay` | Not available (temporarily disabled) |
 
 The app works fully for backup browsing, media gallery, and file management without these dependencies.
+
+> **Note on Windows auto-setup:** When a tool is missing, the app offers to download and set it up automatically. Portable tools are stored in `~/.config/itunes-backup-explorer/` and don't require admin privileges or system-wide installation.
 
 ---
 
@@ -172,14 +208,18 @@ mvn exec:exec
 
 | Component | Technology |
 |-----------|-----------|
-| Language | Java 18 |
+| Language | Java 18+ |
 | GUI Framework | JavaFX 23 (FXML MVC) |
 | Build System | Apache Maven |
 | Cryptography | Bouncy Castle 1.80 (AES-256, PBKDF2, AES-Wrap) |
-| Database | SQLite (Xerial sqlite-jdbc) |
+| Database | SQLite (Xerial sqlite-jdbc 3.49) |
 | Plist Parsing | dd-plist |
-| Screen Mirroring | pymobiledevice3 (Python, AirPlay + USB) |
-| Device Communication | libimobiledevice CLI |
+| Compression | Apache Commons Compress + XZ |
+| Screen Mirroring | pymobiledevice3 (Python, USB + AirPlay) |
+| Device Communication | libimobiledevice (CLI) + pymobiledevice3 (fallback) |
+| Video Thumbnails | ffmpeg |
+| HEIC Thumbnails | ImageMagick (primary) / ffmpeg (fallback) |
+| Tests | JUnit Jupiter 5 |
 
 ---
 
@@ -190,6 +230,8 @@ The search tab uses case-insensitive SQLite LIKE syntax with two wildcards:
 - `%` — matches any sequence of zero or more characters
 - `_` — matches any single character
 - `\` — escape character
+
+**Quick filters** are available for common searches: Photos, Videos, WhatsApp, Contacts, Messages, Notes, Voice Memos.
 
 **Examples:**
 
@@ -212,7 +254,7 @@ This application does **not** collect any data. It does not use an internet conn
 
 ## Origin
 
-iTunes Backup Explorer is a fork of the [original iTunes Backup Explorer](https://github.com/MaxiHuHe04/iTunes-Backup-Explorer) by [MaxiHuHe04](https://github.com/MaxiHuHe04), which provided the foundation for encrypted backup browsing. This project extends it with AirPlay mirroring, media gallery, live device control, and a modern UI.
+iTunes Backup Explorer is a fork of the [original iTunes Backup Explorer](https://github.com/MaxiHuHe04/iTunes-Backup-Explorer) by [MaxiHuHe04](https://github.com/MaxiHuHe04), which provided the foundation for encrypted backup browsing. This project extends it with screen mirroring, media gallery, live device control, backup creation, automatic tool setup, and a modern UI.
 
 **Key references:**
 - [iPhone Data Protection in Depth](https://conference.hitb.org/hitbsecconf2011ams/materials/D2T2) (HITB SecConf 2011)
