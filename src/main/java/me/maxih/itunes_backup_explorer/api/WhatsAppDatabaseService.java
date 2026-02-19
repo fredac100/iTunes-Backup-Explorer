@@ -82,7 +82,11 @@ public class WhatsAppDatabaseService implements AutoCloseable {
         }
 
         sql.append(" FROM ZWACHATSESSION cs ");
-        sql.append("WHERE (cs.ZCONTACTJID IS NOT NULL AND cs.ZCONTACTJID != '') OR cs.ZSESSIONTYPE = 1 ");
+        if (hasChatSession) {
+            sql.append("WHERE EXISTS (SELECT 1 FROM ZWAMESSAGE m WHERE m.ZCHATSESSION = cs.Z_PK) ");
+        } else {
+            sql.append("WHERE COALESCE(cs.ZMESSAGECOUNTER, 0) > 0 ");
+        }
         sql.append("ORDER BY cs.ZLASTMESSAGEDATE DESC");
 
         logger.debug("Chats query: {}", sql);
@@ -118,6 +122,7 @@ public class WhatsAppDatabaseService implements AutoCloseable {
         boolean hasMediaLocalPath = mediaColumns.contains("ZMEDIALOCALPATH");
         boolean hasThumbnailData = mediaColumns.contains("ZTHUMBNAILDATA");
         boolean hasThumbnailLocalPath = mediaColumns.contains("ZTHUMBNAILLOCALPATH");
+        boolean hasXmppThumbPath = mediaColumns.contains("ZXMPPTHUMBPATH");
         boolean hasVcardString = mediaColumns.contains("ZVCARDSTRING");
         boolean hasFileSize = mediaColumns.contains("ZFILESIZE");
         boolean hasTitle = mediaColumns.contains("ZTITLE");
@@ -132,6 +137,7 @@ public class WhatsAppDatabaseService implements AutoCloseable {
             if (hasMediaLocalPath) sql.append(", mi.ZMEDIALOCALPATH");
             if (hasThumbnailData) sql.append(", mi.ZTHUMBNAILDATA");
             if (hasThumbnailLocalPath) sql.append(", mi.ZTHUMBNAILLOCALPATH");
+            if (hasXmppThumbPath) sql.append(", mi.ZXMPPTHUMBPATH");
             if (hasVcardString) sql.append(", mi.ZVCARDSTRING");
             if (hasFileSize) sql.append(", mi.ZFILESIZE");
             if (hasTitle) sql.append(", mi.ZTITLE");
@@ -154,11 +160,13 @@ public class WhatsAppDatabaseService implements AutoCloseable {
                         String mediaPath = hasMediaLocalPath ? rs.getString("ZMEDIALOCALPATH") : null;
                         byte[] thumbnailData = hasThumbnailData ? rs.getBytes("ZTHUMBNAILDATA") : null;
                         String thumbnailLocalPath = hasThumbnailLocalPath ? rs.getString("ZTHUMBNAILLOCALPATH") : null;
-                        if (mediaPath != null || thumbnailData != null || thumbnailLocalPath != null) {
+                        String xmppThumbPath = hasXmppThumbPath ? rs.getString("ZXMPPTHUMBPATH") : null;
+                        if (mediaPath != null || thumbnailData != null || thumbnailLocalPath != null || xmppThumbPath != null) {
                             media = new WhatsAppMedia(
                                     mediaPath,
                                     thumbnailData,
                                     thumbnailLocalPath,
+                                    xmppThumbPath,
                                     hasVcardString ? rs.getString("ZVCARDSTRING") : null,
                                     hasFileSize ? rs.getLong("ZFILESIZE") : 0,
                                     hasTitle ? rs.getString("ZTITLE") : null

@@ -8,7 +8,6 @@ import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
-import javafx.stage.FileChooser;
 import me.maxih.itunes_backup_explorer.util.DeviceApp;
 import me.maxih.itunes_backup_explorer.util.DeviceInfo;
 import me.maxih.itunes_backup_explorer.util.DeviceService;
@@ -16,7 +15,6 @@ import me.maxih.itunes_backup_explorer.util.FileSize;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -260,11 +258,6 @@ public class DeviceTabController {
     }
 
     @FXML
-    private void refreshDevice() {
-        if (deviceConnected) loadDeviceData();
-    }
-
-    @FXML
     private void uninstallApp() {
         DeviceApp selected = appsTable.getSelectionModel().getSelectedItem();
         if (selected == null || !"User".equals(selected.appType())) return;
@@ -295,55 +288,6 @@ public class DeviceTabController {
         });
         task.setOnFailed(e -> Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to uninstall app"));
         new Thread(task).start();
-    }
-
-    @FXML
-    private void takeScreenshot() {
-        FileChooser chooser = new FileChooser();
-        chooser.setInitialFileName("screenshot.png");
-        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG", "*.png"));
-        File file = chooser.showSaveDialog(appsTable.getScene().getWindow());
-        if (file == null) return;
-        String udid = this.currentUdid;
-        javafx.concurrent.Task<Boolean> task = new javafx.concurrent.Task<>() {
-            @Override
-            protected Boolean call() {
-                return DeviceService.takeScreenshot(udid, file);
-            }
-        };
-        task.setOnSucceeded(e -> {
-            if (task.getValue()) Dialogs.showAlert(Alert.AlertType.INFORMATION, "Screenshot saved: " + file.getName());
-            else Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to capture screenshot");
-        });
-        task.setOnFailed(e -> Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to capture screenshot"));
-        new Thread(task).start();
-    }
-
-    @FXML
-    private void restartDevice() {
-        Optional<ButtonType> result = Dialogs.showAlert(Alert.AlertType.CONFIRMATION, "Restart the device?", ButtonType.OK, ButtonType.CANCEL);
-        if (result.isPresent() && result.get() == ButtonType.OK) {
-            String udid = this.currentUdid;
-            new Thread(() -> DeviceService.restartDevice(udid)).start();
-        }
-    }
-
-    @FXML
-    private void shutdownDevice() {
-        Optional<ButtonType> result = Dialogs.showAlert(Alert.AlertType.CONFIRMATION, "Shut down the device?", ButtonType.OK, ButtonType.CANCEL);
-        if (result.isPresent() && result.get() == ButtonType.OK) {
-            String udid = this.currentUdid;
-            new Thread(() -> DeviceService.shutdownDevice(udid)).start();
-        }
-    }
-
-    @FXML
-    private void sleepDevice() {
-        Optional<ButtonType> result = Dialogs.showAlert(Alert.AlertType.CONFIRMATION, "Sleep the device?", ButtonType.OK, ButtonType.CANCEL);
-        if (result.isPresent() && result.get() == ButtonType.OK) {
-            String udid = this.currentUdid;
-            new Thread(() -> DeviceService.sleepDevice(udid)).start();
-        }
     }
 
     public void stopPolling() {

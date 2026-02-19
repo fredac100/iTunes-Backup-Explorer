@@ -6,15 +6,18 @@ import javafx.collections.transformation.FilteredList;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Cursor;
 import javafx.scene.Node;
+import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
-import javafx.scene.layout.Region;
-import javafx.scene.layout.VBox;
+import javafx.scene.input.KeyCode;
+import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
 import javafx.stage.FileChooser;
+import javafx.stage.Screen;
+import javafx.stage.Stage;
 import me.maxih.itunes_backup_explorer.api.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,7 +37,7 @@ public class WhatsAppTabController {
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
     private static final DateTimeFormatter SHORT_DATE_FMT = DateTimeFormatter.ofPattern("dd/MM HH:mm").withZone(ZoneId.systemDefault());
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss").withZone(ZoneId.systemDefault());
-    private static final String WHATSAPP_DOMAIN = "%group.net.whatsapp%";
+    private static final String WHATSAPP_DOMAIN = "%net.whatsapp%";
     private static final String CHAT_STORAGE_PATTERN = "%ChatStorage.sqlite";
 
     private static final String[] SENDER_COLORS = {
@@ -46,7 +49,7 @@ public class WhatsAppTabController {
 
     private ITunesBackup selectedBackup;
     private WhatsAppDatabaseService databaseService;
-    private File tempDbFile;
+    private File tempDbDir;
     private String whatsappDomain;
     private final Map<String, Image> thumbnailCache = new HashMap<>();
     private File thumbnailCacheDir;
@@ -108,23 +111,41 @@ public class WhatsAppTabController {
             protected DbLoadResult call() throws Exception {
                 List<BackupFile> results = backup.searchFiles(WHATSAPP_DOMAIN, CHAT_STORAGE_PATTERN);
 
-                BackupFile chatStorageFile = results.stream()
+                List<BackupFile> chatDbs = results.stream()
                         .filter(f -> f.getFileType() == BackupFile.FileType.FILE)
                         .filter(f -> f.relativePath.endsWith("ChatStorage.sqlite"))
+                        .collect(Collectors.toList());
+
+                logger.info("Found {} ChatStorage.sqlite candidates: {}", chatDbs.size(),
+                        chatDbs.stream().map(f -> f.domain).collect(Collectors.joining(", ")));
+
+                // Prefer regular WhatsApp over WhatsApp Business (SMB)
+                BackupFile chatStorageFile = chatDbs.stream()
+                        .filter(f -> !f.domain.contains("WhatsAppSMB"))
                         .findFirst()
+                        .or(() -> chatDbs.stream().findFirst())
                         .orElse(null);
 
                 if (chatStorageFile == null) return null;
 
-                logger.info("Found ChatStorage.sqlite in domain '{}' at '{}'",
+                logger.info("Selected ChatStorage.sqlite from domain '{}' at '{}'",
                         chatStorageFile.domain, chatStorageFile.relativePath);
 
-                File temp = File.createTempFile("whatsapp_chat_", ".sqlite");
-                temp.deleteOnExit();
-                tempDbFile = temp;
-                chatStorageFile.extract(temp);
+                // Create a temp directory so WAL/SHM companion files sit beside the main DB
+                File dir = Files.createTempDirectory("whatsapp_db_").toFile();
+                dir.deleteOnExit();
+                tempDbDir = dir;
 
-                return new DbLoadResult(new WhatsAppDatabaseService(temp), chatStorageFile.domain);
+                File dbFile = new File(dir, "ChatStorage.sqlite");
+                dbFile.deleteOnExit();
+                chatStorageFile.extract(dbFile);
+
+                // Extract WAL and SHM — these contain the most recent uncommitted data
+                String domain = chatStorageFile.domain;
+                extractCompanionFile(backup, domain, "ChatStorage.sqlite-wal", dir);
+                extractCompanionFile(backup, domain, "ChatStorage.sqlite-shm", dir);
+
+                return new DbLoadResult(new WhatsAppDatabaseService(dbFile), domain);
             }
         };
 
@@ -153,6 +174,25 @@ public class WhatsAppTabController {
         Thread thread = new Thread(task, "whatsapp-db-extract");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    private static void extractCompanionFile(ITunesBackup backup, String domain, String fileName, File targetDir) {
+        try {
+            List<BackupFile> results = backup.searchFiles(domain, "%" + fileName);
+            BackupFile file = results.stream()
+                    .filter(f -> f.getFileType() == BackupFile.FileType.FILE)
+                    .filter(f -> f.relativePath.endsWith(fileName))
+                    .findFirst()
+                    .orElse(null);
+            if (file != null) {
+                File target = new File(targetDir, fileName);
+                target.deleteOnExit();
+                file.extract(target);
+                logger.info("Extracted WAL companion '{}' ({} bytes)", fileName, target.length());
+            }
+        } catch (Exception e) {
+            logger.debug("Companion file '{}' not found or not extractable: {}", fileName, e.getMessage());
+        }
     }
 
     private void loadChats() {
@@ -247,6 +287,21 @@ public class WhatsAppTabController {
 
             Collections.reverse(newMessages);
 
+            // Diagnostic: show media path availability
+            List<WhatsAppMessage> mediaMessages = newMessages.stream()
+                    .filter(m -> m.media() != null).collect(Collectors.toList());
+            if (!mediaMessages.isEmpty()) {
+                long withLocalPath = mediaMessages.stream().filter(m -> m.media().localPath() != null).count();
+                long withThumbPath = mediaMessages.stream().filter(m -> m.media().thumbnailLocalPath() != null).count();
+                long withXmppThumb = mediaMessages.stream().filter(m -> m.media().xmppThumbPath() != null).count();
+                logger.info("Media paths: {} media msgs, {} with localPath, {} with thumbLocalPath, {} with xmppThumbPath",
+                        mediaMessages.size(), withLocalPath, withThumbPath, withXmppThumb);
+                mediaMessages.stream().limit(3).forEach(m ->
+                        logger.info("  Sample: type={}, localPath={}, thumbPath={}, xmppThumb={}",
+                                m.messageType(), m.media().localPath(),
+                                m.media().thumbnailLocalPath(), m.media().xmppThumbPath()));
+            }
+
             boolean isGroup = selectedChat.isGroup();
             List<Node> bubbles = newMessages.stream()
                     .map(msg -> renderMessage(msg, isGroup))
@@ -309,35 +364,43 @@ public class WhatsAppTabController {
             try {
                 Image img = new Image(new ByteArrayInputStream(msg.media().thumbnailData()));
                 if (!img.isError()) {
-                    ImageView iv = new ImageView(img);
-                    iv.setFitWidth(200);
-                    iv.setPreserveRatio(true);
-                    iv.setSmooth(true);
-                    iv.getStyleClass().add("whatsapp-media-thumbnail");
-                    bubble.getChildren().add(iv);
+                    bubble.getChildren().add(createMediaImageView(img, msg));
                 } else {
+                    logger.debug("Embedded thumbnail failed to decode for msg {}, localPath={}", msg.id(), msg.media().localPath());
                     addMediaPlaceholder(bubble, typeLabel);
                 }
             } catch (Exception e) {
                 addMediaPlaceholder(bubble, typeLabel);
             }
-        } else if (hasMedia && msg.media().localPath() != null) {
-            Image thumbImage = loadThumbnail(msg.media().localPath());
-            if (thumbImage == null && isImageType(msg)) {
+        } else if (hasMedia) {
+            Image thumbImage = null;
+            // Try the actual media file by explicit localPath (best quality)
+            if (msg.media().localPath() != null) {
                 thumbImage = loadMediaFile(msg.media().localPath());
             }
+            // Try to find full media by UUID from the xmpp thumb path
+            if (thumbImage == null && msg.media().xmppThumbPath() != null) {
+                thumbImage = loadFullMediaByThumbPath(msg.media().xmppThumbPath());
+            }
+            // Fall back to thumbnail paths
+            if (thumbImage == null && msg.media().thumbnailLocalPath() != null) {
+                thumbImage = loadMediaFile(msg.media().thumbnailLocalPath());
+            }
+            if (thumbImage == null && msg.media().xmppThumbPath() != null) {
+                thumbImage = loadMediaFile(msg.media().xmppThumbPath());
+            }
+            // Last resort: .thumb heuristic
+            if (thumbImage == null && msg.media().localPath() != null) {
+                thumbImage = loadThumbnail(msg.media().localPath());
+            }
             if (thumbImage != null) {
-                ImageView iv = new ImageView(thumbImage);
-                iv.setFitWidth(200);
-                iv.setPreserveRatio(true);
-                iv.setSmooth(true);
-                iv.getStyleClass().add("whatsapp-media-thumbnail");
-                bubble.getChildren().add(iv);
+                bubble.getChildren().add(createMediaImageView(thumbImage, msg));
             } else {
+                logger.info("Media not found for msg {} type={}, localPath={}, thumbLocalPath={}, xmppThumb={}",
+                        msg.id(), msg.messageType(), msg.media().localPath(),
+                        msg.media().thumbnailLocalPath(), msg.media().xmppThumbPath());
                 addMediaPlaceholderWithDetails(bubble, typeLabel, msg);
             }
-        } else if (hasMedia) {
-            addMediaPlaceholderWithDetails(bubble, typeLabel, msg);
         }
 
         if (hasText) {
@@ -414,20 +477,23 @@ public class WhatsAppTabController {
         if (cached != null) return cached;
 
         try {
-            String thumbRelativePath = "Message/" + mediaLocalPath.replaceAll("\\.[^.]+$", ".thumb");
+            String thumbName = mediaLocalPath.replaceAll("\\.[^.]+$", ".thumb");
+            String basename = thumbName.contains("/") ? thumbName.substring(thumbName.lastIndexOf('/') + 1) : thumbName;
 
-            List<BackupFile> results = selectedBackup.searchFiles(whatsappDomain, thumbRelativePath);
-            BackupFile thumbFile = results.stream()
-                    .filter(f -> f.getFileType() == BackupFile.FileType.FILE)
-                    .findFirst()
-                    .orElse(null);
+            // Search patterns from most specific to broadest
+            String[] patterns = {
+                "%" + thumbName,       // e.g. %Photos/IMG_001.thumb
+                "%" + basename         // e.g. %IMG_001.thumb
+            };
 
-            if (thumbFile == null) {
-                results = selectedBackup.searchFiles(whatsappDomain, mediaLocalPath.replaceAll("\\.[^.]+$", ".thumb"));
+            BackupFile thumbFile = null;
+            for (String pattern : patterns) {
+                List<BackupFile> results = selectedBackup.searchFiles(whatsappDomain, pattern);
                 thumbFile = results.stream()
                         .filter(f -> f.getFileType() == BackupFile.FileType.FILE)
                         .findFirst()
                         .orElse(null);
+                if (thumbFile != null) break;
             }
 
             if (thumbFile == null) return null;
@@ -437,7 +503,7 @@ public class WhatsAppTabController {
                 thumbFile.extract(tempFile);
             }
 
-            Image image = new Image(tempFile.toURI().toString(), 200, 0, true, true);
+            Image image = new Image(tempFile.toURI().toString(), 400, 0, true, true);
             if (!image.isError()) {
                 thumbnailCache.put(mediaLocalPath, image);
                 return image;
@@ -461,35 +527,271 @@ public class WhatsAppTabController {
         Image cached = thumbnailCache.get(cacheKey);
         if (cached != null) return cached;
 
+        String basename = localPath.contains("/") ? localPath.substring(localPath.lastIndexOf('/') + 1) : localPath;
+
+        // Search patterns from most specific to broadest
         String[] patterns = {
-            "Message/" + localPath,
-            localPath
+            "%" + localPath,      // e.g. %Media/0/IMG_001.jpg
+            "%" + basename        // e.g. %IMG_001.jpg
         };
 
-        for (String pattern : patterns) {
-            try {
-                List<BackupFile> results = selectedBackup.searchFiles(whatsappDomain, pattern);
-                BackupFile mediaFile = results.stream()
-                    .filter(f -> f.getFileType() == BackupFile.FileType.FILE)
-                    .findFirst()
-                    .orElse(null);
+        // Try exact domain first, then all WhatsApp domains
+        String[] domains = {whatsappDomain, "%net.whatsapp%"};
 
-                if (mediaFile != null) {
-                    File tempFile = new File(thumbnailCacheDir, "media_" + mediaFile.fileID);
-                    if (!tempFile.exists()) {
-                        mediaFile.extract(tempFile);
+        for (String domain : domains) {
+            for (String pattern : patterns) {
+                try {
+                    List<BackupFile> results = selectedBackup.searchFiles(domain, pattern);
+                    BackupFile mediaFile = results.stream()
+                        .filter(f -> f.getFileType() == BackupFile.FileType.FILE)
+                        .findFirst()
+                        .orElse(null);
+
+                    if (mediaFile != null) {
+                        File tempFile = new File(thumbnailCacheDir, "media_" + mediaFile.fileID);
+                        if (!tempFile.exists()) {
+                            mediaFile.extract(tempFile);
+                        }
+                        Image image = new Image(tempFile.toURI().toString(), 400, 0, true, true);
+                        if (!image.isError()) {
+                            thumbnailCache.put(cacheKey, image);
+                            return image;
+                        }
                     }
-                    Image image = new Image(tempFile.toURI().toString(), 200, 0, true, true);
-                    if (!image.isError()) {
-                        thumbnailCache.put(cacheKey, image);
-                        return image;
-                    }
+                } catch (Exception e) {
+                    logger.debug("Failed to load media file {}", localPath, e);
                 }
-            } catch (Exception e) {
-                logger.debug("Failed to load media file {}", localPath, e);
             }
         }
         return null;
+    }
+
+    /**
+     * Finds the full-resolution media file by extracting the UUID from an xmpp thumb path.
+     * E.g. "Media/553...@s.whatsapp.net/a/c/ac74d48b-...-559e812f707.thumb"
+     *   → searches for "%ac74d48b-...-559e812f707%" excluding .thumb files.
+     */
+    private Image loadFullMediaByThumbPath(String xmppThumbPath) {
+        if (xmppThumbPath == null || !xmppThumbPath.endsWith(".thumb") || thumbnailCacheDir == null)
+            return null;
+
+        String cacheKey = "fullmedia:" + xmppThumbPath;
+        Image cached = thumbnailCache.get(cacheKey);
+        if (cached != null) return cached;
+
+        String baseName = extractThumbBaseName(xmppThumbPath);
+        if (baseName == null) return null;
+
+        try {
+            List<BackupFile> results = selectedBackup.searchFiles("%net.whatsapp%", "%" + baseName + "%");
+            BackupFile mediaFile = results.stream()
+                    .filter(f -> f.getFileType() == BackupFile.FileType.FILE)
+                    .filter(f -> !f.relativePath.endsWith(".thumb"))
+                    .findFirst()
+                    .orElse(null);
+
+            if (mediaFile != null) {
+                logger.info("Found full media via UUID '{}' → {} ({} in {})",
+                        baseName, mediaFile.relativePath, mediaFile.fileID, mediaFile.domain);
+                File tempFile = new File(thumbnailCacheDir, "media_" + mediaFile.fileID);
+                if (!tempFile.exists()) {
+                    mediaFile.extract(tempFile);
+                }
+                Image image = new Image(tempFile.toURI().toString(), 400, 0, true, true);
+                if (!image.isError()) {
+                    thumbnailCache.put(cacheKey, image);
+                    return image;
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to find full media by thumb path: {}", xmppThumbPath, e);
+        }
+        return null;
+    }
+
+    private File extractFullMediaByThumbPath(String xmppThumbPath) {
+        if (xmppThumbPath == null || !xmppThumbPath.endsWith(".thumb") || thumbnailCacheDir == null)
+            return null;
+
+        String baseName = extractThumbBaseName(xmppThumbPath);
+        if (baseName == null) return null;
+
+        try {
+            List<BackupFile> results = selectedBackup.searchFiles("%net.whatsapp%", "%" + baseName + "%");
+            BackupFile mediaFile = results.stream()
+                    .filter(f -> f.getFileType() == BackupFile.FileType.FILE)
+                    .filter(f -> !f.relativePath.endsWith(".thumb"))
+                    .findFirst()
+                    .orElse(null);
+
+            if (mediaFile != null) {
+                String rp = mediaFile.relativePath;
+                String ext = rp.contains(".") ? rp.substring(rp.lastIndexOf('.')) : "";
+                File tempFile = new File(thumbnailCacheDir, "full_" + mediaFile.fileID + ext);
+                if (!tempFile.exists()) {
+                    mediaFile.extract(tempFile);
+                }
+                return tempFile;
+            }
+        } catch (Exception e) {
+            logger.debug("Failed to extract full media by thumb path: {}", xmppThumbPath, e);
+        }
+        return null;
+    }
+
+    private static String extractThumbBaseName(String xmppThumbPath) {
+        // "Media/.../ac74d48b-0b6f-42a1-bb2c-559e812f707.thumb" → "ac74d48b-0b6f-42a1-bb2c-559e812f707"
+        String withoutExt = xmppThumbPath.substring(0, xmppThumbPath.length() - ".thumb".length());
+        String baseName = withoutExt.contains("/") ? withoutExt.substring(withoutExt.lastIndexOf('/') + 1) : withoutExt;
+        return baseName.isEmpty() ? null : baseName;
+    }
+
+    private ImageView createMediaImageView(Image image, WhatsAppMessage msg) {
+        ImageView iv = new ImageView(image);
+        // Don't stretch tiny thumbnails — cap at 2x natural size to avoid pixelation
+        double naturalWidth = image.getWidth();
+        if (naturalWidth > 0 && naturalWidth < 150) {
+            iv.setFitWidth(Math.min(naturalWidth * 2, 300));
+        } else {
+            iv.setFitWidth(300);
+        }
+        iv.setPreserveRatio(true);
+        iv.setSmooth(true);
+        iv.getStyleClass().add("whatsapp-media-thumbnail");
+        iv.setCursor(Cursor.HAND);
+        iv.setOnMouseClicked(event -> openMediaFullSize(msg));
+        return iv;
+    }
+
+    private void openMediaFullSize(WhatsAppMessage msg) {
+        if (msg.media() == null || selectedBackup == null || whatsappDomain == null) return;
+
+        javafx.concurrent.Task<File> task = new javafx.concurrent.Task<>() {
+            @Override
+            protected File call() throws Exception {
+                WhatsAppMedia media = msg.media();
+                // Try the actual media file by explicit path
+                File file = extractFullMediaFile(media.localPath());
+                // Try to find full media by UUID from thumb path
+                if (file == null && media.xmppThumbPath() != null) {
+                    file = extractFullMediaByThumbPath(media.xmppThumbPath());
+                }
+                // Fall back to thumbnail paths
+                if (file == null) file = extractFullMediaFile(media.thumbnailLocalPath());
+                if (file == null) file = extractFullMediaFile(media.xmppThumbPath());
+                return file;
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+            File file = task.getValue();
+            if (file == null) {
+                logger.warn("Could not extract full media for msg {} (localPath={}, thumbPath={}, xmppThumb={})",
+                        msg.id(), msg.media().localPath(), msg.media().thumbnailLocalPath(), msg.media().xmppThumbPath());
+                return;
+            }
+
+            logger.info("Opening media file: {} ({} bytes)", file.getName(), file.length());
+            String name = file.getName().toLowerCase(Locale.ROOT);
+            if (name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") ||
+                    name.endsWith(".gif") || name.endsWith(".bmp") || name.endsWith(".webp")) {
+                showImagePopup(file);
+            } else {
+                // Videos, HEIC, audio, documents → system viewer
+                openWithSystemViewer(file);
+            }
+        });
+
+        task.setOnFailed(event -> logger.error("Failed to extract media", task.getException()));
+
+        Thread thread = new Thread(task, "whatsapp-open-media");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private File extractFullMediaFile(String localPath) {
+        if (localPath == null || thumbnailCacheDir == null) return null;
+
+        String basename = localPath.contains("/") ? localPath.substring(localPath.lastIndexOf('/') + 1) : localPath;
+        String ext = basename.contains(".") ? basename.substring(basename.lastIndexOf('.')) : "";
+        String[] patterns = {"%" + localPath, "%" + basename};
+        String[] domains = {whatsappDomain, "%net.whatsapp%"};
+
+        for (String domain : domains) {
+            for (String pattern : patterns) {
+                try {
+                    List<BackupFile> results = selectedBackup.searchFiles(domain, pattern);
+                    BackupFile mediaFile = results.stream()
+                            .filter(f -> f.getFileType() == BackupFile.FileType.FILE)
+                            .findFirst()
+                            .orElse(null);
+
+                    if (mediaFile != null) {
+                        File tempFile = new File(thumbnailCacheDir, "full_" + mediaFile.fileID + ext);
+                        if (!tempFile.exists()) {
+                            mediaFile.extract(tempFile);
+                        }
+                        return tempFile;
+                    }
+                } catch (Exception e) {
+                    logger.debug("Failed to extract full media: {}", e.getMessage());
+                }
+            }
+        }
+        return null;
+    }
+
+    private void showImagePopup(File imageFile) {
+        Image fullImage = new Image(imageFile.toURI().toString());
+        if (fullImage.isError()) {
+            openWithSystemViewer(imageFile);
+            return;
+        }
+
+        ImageView fullView = new ImageView(fullImage);
+        fullView.setPreserveRatio(true);
+        fullView.setSmooth(true);
+
+        javafx.geometry.Rectangle2D screenBounds = Screen.getPrimary().getVisualBounds();
+        double maxW = screenBounds.getWidth() * 0.85;
+        double maxH = screenBounds.getHeight() * 0.85;
+        fullView.setFitWidth(Math.min(fullImage.getWidth(), maxW));
+        fullView.setFitHeight(Math.min(fullImage.getHeight(), maxH));
+
+        StackPane root = new StackPane(fullView);
+        root.setStyle("-fx-background-color: #1a1a1a; -fx-padding: 10;");
+
+        Scene scene = new Scene(root);
+        scene.setFill(Color.web("#1a1a1a"));
+
+        Stage stage = new Stage();
+        stage.setTitle("WhatsApp Media");
+        stage.setScene(scene);
+        stage.sizeToScene();
+
+        root.setOnMouseClicked(e -> stage.close());
+        scene.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.ESCAPE) stage.close();
+        });
+
+        stage.show();
+    }
+
+    private void openWithSystemViewer(File file) {
+        try {
+            String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+            ProcessBuilder pb;
+            if (os.contains("win")) {
+                pb = new ProcessBuilder("cmd", "/c", "start", "", file.getAbsolutePath());
+            } else if (os.contains("mac")) {
+                pb = new ProcessBuilder("open", file.getAbsolutePath());
+            } else {
+                pb = new ProcessBuilder("xdg-open", file.getAbsolutePath());
+            }
+            pb.start();
+        } catch (Exception e) {
+            logger.error("Failed to open file: {}", file.getAbsolutePath(), e);
+        }
     }
 
     private String getMessageTypeLabel(int type) {
@@ -565,9 +867,11 @@ public class WhatsAppTabController {
             databaseService.close();
             databaseService = null;
         }
-        if (tempDbFile != null) {
-            tempDbFile.delete();
-            tempDbFile = null;
+        if (tempDbDir != null) {
+            File[] dbFiles = tempDbDir.listFiles();
+            if (dbFiles != null) for (File f : dbFiles) f.delete();
+            tempDbDir.delete();
+            tempDbDir = null;
         }
         thumbnailCache.clear();
         whatsappDomain = null;

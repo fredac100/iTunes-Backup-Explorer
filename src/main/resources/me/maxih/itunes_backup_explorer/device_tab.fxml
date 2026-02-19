@@ -25,16 +25,6 @@
                 <HBox spacing="10" alignment="CENTER_LEFT">
                     <Label fx:id="deviceNameLabel" styleClass="device-header-name"/>
                     <Label fx:id="deviceModelLabel" styleClass="device-header-model"/>
-                    <Region HBox.hgrow="ALWAYS"/>
-                    <Button text="Refresh" onAction="#refreshDevice"/>
-                    <Button text="Screenshot" onAction="#takeScreenshot"/>
-                    <MenuButton text="Actions">
-                        <items>
-                            <MenuItem text="Restart" onAction="#restartDevice"/>
-                            <MenuItem text="Shutdown" onAction="#shutdownDevice"/>
-                            <MenuItem text="Sleep" onAction="#sleepDevice"/>
-                        </items>
-                    </MenuButton>
                 </HBox>
 
                 <VBox spacing="10">
