@@ -734,6 +734,7 @@ public class WindowController {
         Pattern ideviceSizePattern = Pattern.compile("\\(([\\d.]+)\\s*(\\w+)/([\\d.]+)\\s*(\\w+)\\)");
         Pattern tqdmPattern = Pattern.compile("(\\d+)%\\|.*\\|\\s*([\\d.]+)/([\\d.]+)\\s*\\[([^<]*)<([^,]*),\\s*(.+)]");
         Pattern tqdmSimplePattern = Pattern.compile("(\\d+)%[|\\s]");
+        Pattern idevicePctPattern = Pattern.compile("(\\d+)\\s*%");
         int[] fileCount = {0};
         int[] lastLoggedPct = {-1};
         long[] lastUiUpdate = {0};
@@ -741,6 +742,10 @@ public class WindowController {
         double[] accumulatedBytes = {0};
         double[] prevFileTotal = {0};
         long finalEstimatedTotalBytes = estimatedTotalBytes;
+        boolean[] cliSizeDataAvailable = {false};
+        long[] prevCliTransferred = {0};
+        long[] prevCliTime = {0};
+        double[] cliSmoothedSpeed = {0};
 
         javafx.concurrent.Task<DeviceService.BackupResult> task = new javafx.concurrent.Task<>() {
             @Override
@@ -752,6 +757,7 @@ public class WindowController {
 
                             Matcher tqdmMatcher = tqdmPattern.matcher(trimmed);
                             if (tqdmMatcher.find()) {
+                                cliSizeDataAvailable[0] = true;
                                 long now = System.currentTimeMillis();
                                 if (now - lastUiUpdate[0] < 400) return;
                                 lastUiUpdate[0] = now;
@@ -763,18 +769,27 @@ public class WindowController {
 
                                 String transferredText;
                                 String speedText;
-                                long elapsedMs = now - startTime[0];
                                 if (finalEstimatedTotalBytes > 0) {
                                     long transferred = (long) (pctFloat / 100.0 * finalEstimatedTotalBytes);
                                     transferredText = "Transferred: " + formatSize(transferred) + " / ~" + formatSize(finalEstimatedTotalBytes);
-                                    if (elapsedMs > 3000 && transferred > 0) {
-                                        double bytesPerSec = transferred / (elapsedMs / 1000.0);
-                                        speedText = "Transfer speed: " + formatSpeed(bytesPerSec);
-                                    } else {
-                                        speedText = "Transfer speed: calculating...";
+                                    if (prevCliTime[0] > 0 && transferred > prevCliTransferred[0]) {
+                                        long timeDelta = now - prevCliTime[0];
+                                        long sizeDelta = transferred - prevCliTransferred[0];
+                                        if (timeDelta > 0) {
+                                            double instantSpeed = sizeDelta / (timeDelta / 1000.0);
+                                            cliSmoothedSpeed[0] = cliSmoothedSpeed[0] == 0
+                                                    ? instantSpeed
+                                                    : 0.3 * instantSpeed + 0.7 * cliSmoothedSpeed[0];
+                                        }
                                     }
+                                    prevCliTransferred[0] = transferred;
+                                    prevCliTime[0] = now;
+                                    speedText = cliSmoothedSpeed[0] > 0
+                                            ? "Transfer speed: " + formatSpeed(cliSmoothedSpeed[0])
+                                            : "Transfer speed: calculating...";
                                 } else {
                                     transferredText = "Progress: " + String.format(java.util.Locale.ROOT, "%.1f%%", pctFloat);
+                                    long elapsedMs = now - startTime[0];
                                     if (elapsedMs > 3000 && pctFloat > 0) {
                                         double pctPerSec = pctFloat / (elapsedMs / 1000.0);
                                         speedText = "Transfer speed: " + String.format(java.util.Locale.ROOT, "%.1f%%/min", pctPerSec * 60);
@@ -838,7 +853,10 @@ public class WindowController {
                             }
 
                             Matcher sm = ideviceSizePattern.matcher(trimmed);
-                            if (sm.find()) {
+                            boolean hasSizeInfo = sm.find();
+
+                            if (hasSizeInfo) {
+                                cliSizeDataAvailable[0] = true;
                                 long now = System.currentTimeMillis();
 
                                 double fileCurrent = toBytes(Double.parseDouble(sm.group(1)), sm.group(2));
@@ -853,22 +871,33 @@ public class WindowController {
                                 lastUiUpdate[0] = now;
 
                                 double totalTransferred = accumulatedBytes[0] + fileCurrent;
-                                long elapsed = now - startTime[0];
+
+                                if (prevCliTime[0] > 0 && totalTransferred > prevCliTransferred[0]) {
+                                    long timeDelta = now - prevCliTime[0];
+                                    long sizeDelta = (long) (totalTransferred - prevCliTransferred[0]);
+                                    if (timeDelta > 0 && sizeDelta > 0) {
+                                        double instantSpeed = sizeDelta / (timeDelta / 1000.0);
+                                        cliSmoothedSpeed[0] = cliSmoothedSpeed[0] == 0
+                                                ? instantSpeed
+                                                : 0.3 * instantSpeed + 0.7 * cliSmoothedSpeed[0];
+                                    }
+                                }
+                                prevCliTransferred[0] = (long) totalTransferred;
+                                prevCliTime[0] = now;
 
                                 String speedText = "Transfer speed: --";
                                 String etaText = "Estimated time remaining: calculating...";
                                 double overallPct = 0;
 
-                                if (elapsed > 3000 && totalTransferred > 0) {
-                                    double bytesPerSec = totalTransferred / (elapsed / 1000.0);
-                                    speedText = "Transfer speed: " + formatSpeed(bytesPerSec);
+                                if (cliSmoothedSpeed[0] > 0) {
+                                    speedText = "Transfer speed: " + formatSpeed(cliSmoothedSpeed[0]);
 
                                     if (finalEstimatedTotalBytes > 0) {
                                         overallPct = (totalTransferred / finalEstimatedTotalBytes) * 100.0;
                                         if (overallPct > 100) overallPct = 99.9;
                                         double remainingBytes = finalEstimatedTotalBytes - totalTransferred;
                                         if (remainingBytes > 0) {
-                                            long remainingSec = (long) (remainingBytes / bytesPerSec);
+                                            long remainingSec = (long) (remainingBytes / cliSmoothedSpeed[0]);
                                             etaText = "Estimated time remaining: ~" + formatDuration(remainingSec);
                                         } else {
                                             etaText = "Estimated time remaining: finishing...";
@@ -899,6 +928,20 @@ public class WindowController {
                                         percentLabel.setText(formatSize((long) (accumulatedBytes[0] + fileCurrent)));
                                     }
                                 });
+                            } else if (isIdeviceProgress) {
+                                Matcher pctMatcher = idevicePctPattern.matcher(trimmed);
+                                if (pctMatcher.find()) {
+                                    int pct = Integer.parseInt(pctMatcher.group(1));
+                                    long now = System.currentTimeMillis();
+                                    if (now - lastUiUpdate[0] < 500) return;
+                                    lastUiUpdate[0] = now;
+
+                                    Platform.runLater(() -> {
+                                        progressBar.setProgress(pct / 100.0);
+                                        percentLabel.setText(pct + "%");
+                                        statusLabel.setText("Backup in progress...");
+                                    });
+                                }
                             }
                         },
                         this::isCancelled);
@@ -933,7 +976,10 @@ public class WindowController {
             confirmCancel.run();
         });
 
+        java.util.Timer[] sizeMonitor = {null};
+
         task.setOnSucceeded(event -> Platform.runLater(() -> {
+            if (sizeMonitor[0] != null) sizeMonitor[0].cancel();
             DeviceService.BackupResult result = task.getValue();
             switch (result) {
                 case SUCCESS -> {
@@ -965,12 +1011,14 @@ public class WindowController {
         }));
 
         task.setOnCancelled(event -> Platform.runLater(() -> {
+            if (sizeMonitor[0] != null) sizeMonitor[0].cancel();
             if (progressStage.isShowing()) {
                 progressStage.close();
             }
         }));
 
         task.setOnFailed(event -> Platform.runLater(() -> {
+            if (sizeMonitor[0] != null) sizeMonitor[0].cancel();
             titleLabel.setText("Backup failed");
             String msg = task.getException() != null ? task.getException().getMessage() : "Unknown error";
             statusLabel.setText("Error: " + msg);
@@ -984,6 +1032,77 @@ public class WindowController {
         Thread backupThread = new Thread(task);
         backupThread.setDaemon(true);
         backupThread.start();
+
+        if (!DeviceService.isWindows()) {
+            File backupSubDir = new File(destination, udid);
+            long[] prevDirSize = {0};
+            long[] prevMeasureTime = {0};
+            double[] smoothedSpeed = {0};
+            sizeMonitor[0] = new java.util.Timer("backup-size-monitor", true);
+            sizeMonitor[0].schedule(new java.util.TimerTask() {
+                @Override
+                public void run() {
+                    if (cliSizeDataAvailable[0]) return;
+                    if (!backupSubDir.exists()) return;
+
+                    long dirSize = calculateDirectorySize(backupSubDir.toPath());
+                    if (dirSize <= 0) return;
+
+                    long now = System.currentTimeMillis();
+
+                    if (prevMeasureTime[0] > 0) {
+                        long timeDelta = now - prevMeasureTime[0];
+                        long sizeDelta = dirSize - prevDirSize[0];
+                        if (timeDelta > 0 && sizeDelta > 0) {
+                            double instantSpeed = sizeDelta / (timeDelta / 1000.0);
+                            smoothedSpeed[0] = smoothedSpeed[0] == 0
+                                    ? instantSpeed
+                                    : 0.3 * instantSpeed + 0.7 * smoothedSpeed[0];
+                        }
+                    }
+                    prevDirSize[0] = dirSize;
+                    prevMeasureTime[0] = now;
+
+                    String speedText = "Transfer speed: --";
+                    String etaText = "Estimated time remaining: calculating...";
+                    double pct = 0;
+
+                    String transferredText = "Transferred: " + formatSize(dirSize) +
+                            (finalEstimatedTotalBytes > 0 ? " / ~" + formatSize(finalEstimatedTotalBytes) : "");
+
+                    if (smoothedSpeed[0] > 0) {
+                        speedText = "Transfer speed: " + formatSpeed(smoothedSpeed[0]);
+
+                        if (finalEstimatedTotalBytes > 0) {
+                            pct = (dirSize * 100.0) / finalEstimatedTotalBytes;
+                            if (pct > 100) pct = 99.9;
+                            double remainingBytes = finalEstimatedTotalBytes - dirSize;
+                            if (remainingBytes > 0) {
+                                long remainingSec = (long) (remainingBytes / smoothedSpeed[0]);
+                                etaText = "Estimated time remaining: ~" + formatDuration(remainingSec);
+                            } else {
+                                etaText = "Estimated time remaining: finishing...";
+                            }
+                        }
+                    }
+
+                    double pctFinal = pct;
+                    String speedFinal = speedText;
+                    String etaFinal = etaText;
+                    String transferredFinal = transferredText;
+
+                    Platform.runLater(() -> {
+                        transferredLabel.setText(transferredFinal);
+                        speedLabel.setText(speedFinal);
+                        etaLabel.setText(etaFinal);
+                        if (finalEstimatedTotalBytes > 0 && pctFinal > 0) {
+                            progressBar.setProgress(pctFinal / 100.0);
+                            percentLabel.setText(String.format("%.1f%%", pctFinal));
+                        }
+                    });
+                }
+            }, 3000, 3000);
+        }
 
         progressStage.show();
     }
@@ -1056,6 +1175,19 @@ public class WindowController {
         if (hours > 0) return String.format("%dh %02dm %02ds", hours, minutes, seconds);
         if (minutes > 0) return String.format("%dm %02ds", minutes, seconds);
         return String.format("%ds", seconds);
+    }
+
+    private static long calculateDirectorySize(java.nio.file.Path dir) {
+        if (!java.nio.file.Files.isDirectory(dir)) return 0;
+        try (var stream = java.nio.file.Files.walk(dir)) {
+            return stream.filter(java.nio.file.Files::isRegularFile)
+                         .mapToLong(p -> {
+                             try { return java.nio.file.Files.size(p); }
+                             catch (Exception e) { return 0; }
+                         }).sum();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private void updateStatusBar() {
