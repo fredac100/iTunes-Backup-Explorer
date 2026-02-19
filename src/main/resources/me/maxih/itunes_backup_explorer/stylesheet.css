@@ -1102,3 +1102,239 @@
     -fx-background-color: #f0f4fa;
     -fx-border-color: #c8d7ec;
 }
+
+/* ── WhatsApp Tab ── Dark theme (default) ── */
+
+.whatsapp-chat-list-pane {
+    -fx-background-color: #1e1e2e;
+}
+
+.whatsapp-chat-list {
+    -fx-background-color: #1e1e2e;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+
+.whatsapp-chat-list .list-cell {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent transparent #2a2a3e transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.whatsapp-chat-list .list-cell:hover {
+    -fx-background-color: #2a2a3e;
+}
+
+.whatsapp-chat-list .list-cell:selected {
+    -fx-background-color: #3a3a5e;
+}
+
+.whatsapp-chat-cell {
+    -fx-background-color: transparent;
+}
+
+.whatsapp-chat-name {
+    -fx-font-weight: bold;
+    -fx-font-size: 13px;
+    -fx-text-fill: #e0e0e8;
+}
+
+.whatsapp-chat-preview {
+    -fx-font-size: 12px;
+    -fx-text-fill: #8888a0;
+    -fx-text-overrun: ellipsis;
+}
+
+.whatsapp-chat-time {
+    -fx-font-size: 11px;
+    -fx-text-fill: #6c6c8a;
+}
+
+.whatsapp-chat-badge {
+    -fx-font-size: 11px;
+    -fx-text-fill: #6c7ff2;
+    -fx-font-weight: bold;
+}
+
+.whatsapp-messages-pane {
+    -fx-background-color: #1e1e2e;
+}
+
+.whatsapp-conversation-header {
+    -fx-background-color: #252538;
+    -fx-border-color: transparent transparent #2a2a3e transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.whatsapp-header-name {
+    -fx-font-weight: bold;
+    -fx-font-size: 14px;
+    -fx-text-fill: #e0e0e8;
+}
+
+.whatsapp-header-info {
+    -fx-font-size: 12px;
+    -fx-text-fill: #8888a0;
+}
+
+.whatsapp-messages-scroll {
+    -fx-background-color: #1a1a28;
+    -fx-background: #1a1a28;
+}
+
+.whatsapp-messages-scroll .viewport {
+    -fx-background-color: #1a1a28;
+}
+
+.whatsapp-bubble {
+    -fx-padding: 8 12 6 12;
+    -fx-background-radius: 12;
+}
+
+.whatsapp-bubble-sent {
+    -fx-background-color: rgba(108, 127, 242, 0.15);
+    -fx-background-radius: 12 12 4 12;
+}
+
+.whatsapp-bubble-received {
+    -fx-background-color: #2a2a3e;
+    -fx-background-radius: 12 12 12 4;
+}
+
+.whatsapp-sender-name {
+    -fx-font-weight: bold;
+    -fx-font-size: 12px;
+}
+
+.whatsapp-message-text {
+    -fx-font-size: 13px;
+    -fx-text-fill: #e0e0e8;
+}
+
+.whatsapp-timestamp {
+    -fx-font-size: 10px;
+    -fx-text-fill: #6c6c8a;
+}
+
+.whatsapp-star {
+    -fx-font-size: 10px;
+    -fx-text-fill: #e5c07b;
+}
+
+.whatsapp-media-thumbnail {
+    -fx-effect: null;
+}
+
+.whatsapp-media-placeholder {
+    -fx-background-color: rgba(255, 255, 255, 0.06);
+    -fx-background-radius: 8;
+    -fx-padding: 12 16;
+    -fx-font-size: 13px;
+    -fx-text-fill: #b0b8c8;
+    -fx-alignment: center;
+}
+
+.whatsapp-messages-toolbar {
+    -fx-background-color: #252538;
+    -fx-border-color: #2a2a3e transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+}
+
+.whatsapp-empty-state {
+    -fx-font-size: 14px;
+    -fx-text-fill: #6c6c8a;
+}
+
+/* ── WhatsApp Tab ── Light theme ── */
+
+.theme-light .whatsapp-chat-list-pane {
+    -fx-background-color: #f5f8fc;
+}
+
+.theme-light .whatsapp-chat-list {
+    -fx-background-color: #f5f8fc;
+}
+
+.theme-light .whatsapp-chat-list .list-cell {
+    -fx-border-color: transparent transparent #dce4f0 transparent;
+}
+
+.theme-light .whatsapp-chat-list .list-cell:hover {
+    -fx-background-color: #e8eef6;
+}
+
+.theme-light .whatsapp-chat-list .list-cell:selected {
+    -fx-background-color: #d0ddef;
+}
+
+.theme-light .whatsapp-chat-name {
+    -fx-text-fill: #13233a;
+}
+
+.theme-light .whatsapp-chat-preview {
+    -fx-text-fill: #5a6f8a;
+}
+
+.theme-light .whatsapp-chat-time {
+    -fx-text-fill: #7a8da0;
+}
+
+.theme-light .whatsapp-chat-badge {
+    -fx-text-fill: #2f6ac7;
+}
+
+.theme-light .whatsapp-messages-pane {
+    -fx-background-color: #f5f8fc;
+}
+
+.theme-light .whatsapp-conversation-header {
+    -fx-background-color: #ffffff;
+    -fx-border-color: transparent transparent #dce4f0 transparent;
+}
+
+.theme-light .whatsapp-header-name {
+    -fx-text-fill: #13233a;
+}
+
+.theme-light .whatsapp-header-info {
+    -fx-text-fill: #5a6f8a;
+}
+
+.theme-light .whatsapp-messages-scroll {
+    -fx-background-color: #eef3f9;
+    -fx-background: #eef3f9;
+}
+
+.theme-light .whatsapp-messages-scroll .viewport {
+    -fx-background-color: #eef3f9;
+}
+
+.theme-light .whatsapp-bubble-sent {
+    -fx-background-color: rgba(47, 106, 199, 0.12);
+}
+
+.theme-light .whatsapp-bubble-received {
+    -fx-background-color: #ffffff;
+}
+
+.theme-light .whatsapp-message-text {
+    -fx-text-fill: #13233a;
+}
+
+.theme-light .whatsapp-timestamp {
+    -fx-text-fill: #7a8da0;
+}
+
+.theme-light .whatsapp-media-placeholder {
+    -fx-background-color: rgba(0, 0, 0, 0.05);
+    -fx-text-fill: #5a6f8a;
+}
+
+.theme-light .whatsapp-messages-toolbar {
+    -fx-background-color: #ffffff;
+    -fx-border-color: #dce4f0 transparent transparent transparent;
+}
+
+.theme-light .whatsapp-empty-state {
+    -fx-text-fill: #7a8da0;
+}

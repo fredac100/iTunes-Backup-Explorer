@@ -4,7 +4,7 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<VBox prefHeight="500.0" prefWidth="800.0" stylesheets="@stylesheet.css"
+<VBox prefHeight="800.0" prefWidth="1400.0" stylesheets="@stylesheet.css"
       xmlns="http://javafx.com/javafx/11.0.14-internal" xmlns:fx="http://javafx.com/fxml/1"
       fx:controller="me.maxih.itunes_backup_explorer.ui.WindowController">
     <StackPane VBox.vgrow="ALWAYS">
@@ -48,6 +48,9 @@
                     </Tab>
                     <Tab text="File Search">
                         <fx:include fx:id="fileSearchTabPage" source="file_search_tab.fxml"/>
+                    </Tab>
+                    <Tab text="WhatsApp (Beta)">
+                        <fx:include fx:id="whatsappTabPage" source="whatsapp_tab.fxml"/>
                     </Tab>
                     <Tab text="Device">
                         <fx:include fx:id="deviceTabPage" source="device_tab.fxml"/>

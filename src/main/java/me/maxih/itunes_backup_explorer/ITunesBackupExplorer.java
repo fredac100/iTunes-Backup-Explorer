@@ -23,7 +23,7 @@ public class ITunesBackupExplorer extends Application {
         root.getStyleClass().add("Light".equalsIgnoreCase(PreferencesController.getTheme()) ? "theme-light" : "theme-dark");
         controller = fxmlLoader.getController();
 
-        scene = new Scene(root, 1200, 700);
+        scene = new Scene(root, 1400, 800);
         stage.setScene(scene);
         stage.setTitle("iTunes Backup Explorer");
         stage.setMinWidth(500);

@@ -85,6 +85,11 @@ public class WindowController {
     FileSearchTabController fileSearchTabPageController;
 
     @FXML
+    AnchorPane whatsappTabPage;
+    @FXML
+    WhatsAppTabController whatsappTabPageController;
+
+    @FXML
     AnchorPane deviceTabPage;
     @FXML
     DeviceTabController deviceTabPageController;
@@ -105,7 +110,7 @@ public class WindowController {
 
     @FXML
     public void initialize() {
-        this.lockedTabPages = Arrays.asList(this.filesTabPage, this.mediaTabPage, this.appsTabPage, this.fileSearchTabPage);
+        this.lockedTabPages = Arrays.asList(this.filesTabPage, this.mediaTabPage, this.appsTabPage, this.fileSearchTabPage, this.whatsappTabPage);
 
         this.tabPane.getSelectionModel().selectedItemProperty().addListener((observable, oldTab, newTab) -> {
             if (newTab == null) return;
@@ -138,6 +143,8 @@ public class WindowController {
                 this.appsTabPageController.tabShown(this.selectedBackup);
             } else if (tabPage == this.fileSearchTabPage) {
                 this.fileSearchTabPageController.tabShown(this.selectedBackup);
+            } else if (tabPage == this.whatsappTabPage) {
+                this.whatsappTabPageController.tabShown(this.selectedBackup);
             }
         });
 
@@ -377,6 +384,8 @@ public class WindowController {
             this.appsTabPageController.tabShown(backup);
         } else if (selectedTabPage == this.fileSearchTabPage) {
             this.fileSearchTabPageController.tabShown(backup);
+        } else if (selectedTabPage == this.whatsappTabPage) {
+            this.whatsappTabPageController.tabShown(backup);
         }
 
         if (!mediaToolsSetupOffered && MediaConverter.isMediaToolsNeeded()) {
