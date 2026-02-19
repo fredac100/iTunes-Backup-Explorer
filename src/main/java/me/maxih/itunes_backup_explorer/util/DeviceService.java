@@ -19,6 +19,8 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
+import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry;
+import org.apache.commons.compress.archivers.sevenz.SevenZFile;
 
 public class DeviceService {
 
@@ -634,6 +636,29 @@ public class DeviceService {
                     Files.copy(zis, entryPath, StandardCopyOption.REPLACE_EXISTING);
                 }
                 zis.closeEntry();
+            }
+        }
+    }
+
+    static void extract7z(Path sevenZFile, Path targetDir) throws IOException {
+        try (SevenZFile archive = SevenZFile.builder().setFile(sevenZFile.toFile()).get()) {
+            SevenZArchiveEntry entry;
+            while ((entry = archive.getNextEntry()) != null) {
+                Path entryPath = targetDir.resolve(entry.getName()).normalize();
+                if (!entryPath.startsWith(targetDir)) continue;
+
+                if (entry.isDirectory()) {
+                    Files.createDirectories(entryPath);
+                } else {
+                    Files.createDirectories(entryPath.getParent());
+                    try (OutputStream os = Files.newOutputStream(entryPath)) {
+                        byte[] buffer = new byte[8192];
+                        int len;
+                        while ((len = archive.read(buffer)) > 0) {
+                            os.write(buffer, 0, len);
+                        }
+                    }
+                }
             }
         }
     }

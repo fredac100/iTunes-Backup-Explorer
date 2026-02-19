@@ -154,16 +154,16 @@ public class MediaConverter {
 
     private static void setupImageMagick(Consumer<String> log) throws IOException {
         Files.createDirectories(PORTABLE_IMAGEMAGICK_DIR);
-        Path zipFile = PORTABLE_IMAGEMAGICK_DIR.resolve("imagemagick.zip");
+        Path archiveFile = PORTABLE_IMAGEMAGICK_DIR.resolve("imagemagick.7z");
         try {
             emitLog(log, "Resolving latest ImageMagick version...");
             String url = resolveLatestImageMagickUrl();
-            emitLog(log, "Downloading ImageMagick (~50 MB)...");
-            DeviceService.downloadFile(url, zipFile, log);
+            emitLog(log, "Downloading ImageMagick (~20 MB)...");
+            DeviceService.downloadFile(url, archiveFile, log);
             emitLog(log, "Extracting ImageMagick...");
-            DeviceService.extractZip(zipFile, PORTABLE_IMAGEMAGICK_DIR);
+            DeviceService.extract7z(archiveFile, PORTABLE_IMAGEMAGICK_DIR);
         } finally {
-            Files.deleteIfExists(zipFile);
+            Files.deleteIfExists(archiveFile);
         }
         emitLog(log, "ImageMagick installed successfully.");
     }
@@ -186,7 +186,7 @@ public class MediaConverter {
 
         String version = location.substring(location.lastIndexOf('/') + 1);
         return "https://github.com/ImageMagick/ImageMagick/releases/download/"
-                + version + "/ImageMagick-" + version + "-portable-Q16-HDRI-x64.zip";
+                + version + "/ImageMagick-" + version + "-portable-Q16-HDRI-x64.7z";
     }
 
     private static void emitLog(Consumer<String> log, String message) {

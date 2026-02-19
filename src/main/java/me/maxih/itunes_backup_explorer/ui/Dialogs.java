@@ -24,6 +24,7 @@ public class Dialogs {
         dialog.setTitle("Enter the password");
         dialog.setHeaderText("This backup is encrypted with a password");
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        applyTheme(dialog.getDialogPane());
         ((Stage) dialog.getDialogPane().getScene().getWindow()).getIcons().add(ITunesBackupExplorer.APP_ICON);
 
         PasswordField passwordField = new PasswordField();
@@ -43,6 +44,7 @@ public class Dialogs {
 
     public static Alert getAlert(Alert.AlertType type, String message, ButtonType... buttonTypes) {
         Alert alert = new Alert(type, message, buttonTypes);
+        applyTheme(alert.getDialogPane());
         ((Stage) alert.getDialogPane().getScene().getWindow()).getIcons().add(ITunesBackupExplorer.APP_ICON);
         return alert;
     }
@@ -88,6 +90,14 @@ public class Dialogs {
             this(title, task, event -> cancelAction.run());
         }
 
+    }
+
+    private static void applyTheme(DialogPane dialogPane) {
+        dialogPane.getStylesheets().add(
+                ITunesBackupExplorer.class.getResource("stylesheet.css").toExternalForm()
+        );
+        String theme = "Light".equalsIgnoreCase(PreferencesController.getTheme()) ? "theme-light" : "theme-dark";
+        dialogPane.getStyleClass().add(theme);
     }
 
     private Dialogs() {
