@@ -287,6 +287,19 @@ public class DeviceService {
     }
 
     public static List<DeviceApp> getApps(String udid, boolean system) {
+        if (isLibimobiledeviceAvailable()) {
+            List<DeviceApp> apps = getAppsViaLibimobiledevice(udid, system);
+            if (!apps.isEmpty()) return apps;
+        }
+
+        if (isPymobiledevice3Available()) {
+            return getAppsViaPymd3(udid, system);
+        }
+
+        return new ArrayList<>();
+    }
+
+    private static List<DeviceApp> getAppsViaLibimobiledevice(String udid, boolean system) {
         List<DeviceApp> apps = new ArrayList<>();
 
         String listOption = system ? "list_system" : "list_user";
@@ -318,9 +331,78 @@ public class DeviceService {
         return apps;
     }
 
+    private static List<DeviceApp> getAppsViaPymd3(String udid, boolean system) {
+        List<DeviceApp> apps = new ArrayList<>();
+        String appType = system ? "System" : "User";
+        String script = String.join("\n",
+                "import json",
+                "from pymobiledevice3.lockdown import create_using_usbmux",
+                "from pymobiledevice3.services.installation_proxy import InstallationProxyService",
+                "l = create_using_usbmux(serial='" + udid.replace("'", "") + "')",
+                "svc = InstallationProxyService(lockdown=l)",
+                "apps = svc.get_apps(application_type='" + (system ? "System" : "User") + "')",
+                "result = []",
+                "for bid, info in apps.items():",
+                "    name = info.get('CFBundleDisplayName', '') or info.get('CFBundleName', '')",
+                "    version = info.get('CFBundleShortVersionString', '') or info.get('CFBundleVersion', '')",
+                "    result.append({'name': name, 'bundleId': bid, 'version': version})",
+                "print(json.dumps(result))"
+        );
+        byte[] output = runCommand(30, activePython(), "-c", script);
+        if (output == null) return apps;
+
+        String result = new String(output, StandardCharsets.UTF_8).trim();
+        String[] lines = result.split("\n");
+        String jsonLine = lines[lines.length - 1].trim();
+
+        try {
+            if (!jsonLine.startsWith("[")) return apps;
+            // Parse JSON array manually
+            jsonLine = jsonLine.substring(1, jsonLine.length() - 1);
+            if (jsonLine.isBlank()) return apps;
+
+            // Split by },{ pattern
+            String[] items = jsonLine.split("\\},\\s*\\{");
+            for (String item : items) {
+                item = item.replaceAll("^\\{|\\}$", "");
+                java.util.Map<String, String> map = parseSimpleJson("{" + item + "}");
+                if (map == null) continue;
+                apps.add(new DeviceApp(
+                        map.getOrDefault("name", ""),
+                        map.getOrDefault("bundleId", ""),
+                        map.getOrDefault("version", ""),
+                        appType
+                ));
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to parse pymobiledevice3 app list: {}", e.getMessage());
+        }
+
+        return apps;
+    }
+
     public static boolean uninstallApp(String udid, String bundleId) {
-        byte[] result = runCommand(30, "ideviceinstaller", "-u", udid, "-U", bundleId);
-        return result != null;
+        if (isLibimobiledeviceAvailable()) {
+            byte[] result = runCommand(30, "ideviceinstaller", "-u", udid, "-U", bundleId);
+            if (result != null) return true;
+        }
+
+        if (isPymobiledevice3Available()) {
+            String script = String.join("\n",
+                    "from pymobiledevice3.lockdown import create_using_usbmux",
+                    "from pymobiledevice3.services.installation_proxy import InstallationProxyService",
+                    "l = create_using_usbmux(serial='" + udid.replace("'", "") + "')",
+                    "svc = InstallationProxyService(lockdown=l)",
+                    "svc.uninstall('" + bundleId.replace("'", "") + "')",
+                    "print('OK')"
+            );
+            byte[] output = runCommand(30, activePython(), "-c", script);
+            if (output != null) {
+                return new String(output, StandardCharsets.UTF_8).trim().contains("OK");
+            }
+        }
+
+        return false;
     }
 
     public static boolean takeScreenshot(String udid, File output) {

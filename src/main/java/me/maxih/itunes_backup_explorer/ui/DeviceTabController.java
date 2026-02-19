@@ -124,7 +124,7 @@ public class DeviceTabController {
             uninstallButton.setDisable(newApp == null || !"User".equals(newApp.appType()));
         });
 
-        if (!DeviceService.isLibimobiledeviceAvailable()) {
+        if (!DeviceService.isLibimobiledeviceAvailable() && !DeviceService.isPymobiledevice3Available()) {
             libimobiledeviceWarning.setVisible(true);
             libimobiledeviceWarning.setManaged(true);
         }
@@ -138,7 +138,7 @@ public class DeviceTabController {
     }
 
     private void pollDevice() {
-        if (!DeviceService.isLibimobiledeviceAvailable()) {
+        if (!DeviceService.isLibimobiledeviceAvailable() && !DeviceService.isPymobiledevice3Available()) {
             Platform.runLater(() -> {
                 libimobiledeviceWarning.setVisible(true);
                 libimobiledeviceWarning.setManaged(true);
