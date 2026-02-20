@@ -53,6 +53,7 @@
                     <Label fx:id="messageCountLabel" text="" styleClass="info-label"/>
                     <Region HBox.hgrow="ALWAYS"/>
                     <TextField fx:id="messageSearchField" promptText="Search messages..." prefWidth="180" onAction="#onSearchMessages"/>
+                    <Button fx:id="diagnosticsButton" text="Diagnostics" onAction="#onDiagnostics" disable="true" styleClass="quick-filter"/>
                     <Button fx:id="exportButton" text="Export" onAction="#onExportChat" disable="true" styleClass="quick-filter"/>
                 </HBox>
             </VBox>

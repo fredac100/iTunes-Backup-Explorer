@@ -87,7 +87,12 @@ public class WhatsAppDatabaseService implements AutoCloseable {
         }
 
         sql.append(" FROM ZWACHATSESSION cs ");
-        sql.append("WHERE (cs.ZCONTACTJID IS NOT NULL AND cs.ZCONTACTJID != '') OR cs.ZSESSIONTYPE = 1 ");
+        sql.append("WHERE ((cs.ZCONTACTJID IS NOT NULL AND cs.ZCONTACTJID != '') OR cs.ZSESSIONTYPE = 1) ");
+        if (hasChatSession) {
+            sql.append("AND EXISTS (SELECT 1 FROM ZWAMESSAGE m WHERE m.ZCHATSESSION = cs.Z_PK) ");
+        } else if (hasMessageCounter) {
+            sql.append("AND COALESCE(cs.ZMESSAGECOUNTER, 0) > 0 ");
+        }
         sql.append("ORDER BY cs.ZLASTMESSAGEDATE DESC");
 
         logger.debug("Chats query: {}", sql);

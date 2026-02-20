@@ -36,6 +36,7 @@ import java.security.InvalidKeyException;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -651,6 +652,10 @@ public class WindowController {
         File destination = chooser.showDialog(tabPane.getScene().getWindow());
         if (destination == null) return;
 
+        Optional<Dialogs.EncryptionChoice> encryptionChoiceOpt = Dialogs.askBackupEncryption();
+        if (encryptionChoiceOpt.isEmpty()) return;
+        Dialogs.EncryptionChoice encryptionChoice = encryptionChoiceOpt.get();
+
         Stage progressStage = new Stage();
         progressStage.initModality(Modality.APPLICATION_MODAL);
         progressStage.initOwner(tabPane.getScene().getWindow());
@@ -756,223 +761,245 @@ public class WindowController {
         javafx.concurrent.Task<DeviceService.BackupResult> task = new javafx.concurrent.Task<>() {
             @Override
             protected DeviceService.BackupResult call() {
-                return DeviceService.createBackup(udid, destination,
-                        line -> {
-                            String trimmed = line.trim();
-                            if (trimmed.isEmpty()) return;
+                Consumer<String> onProgressLine = line -> {
+                    String trimmed = line.trim();
+                    if (trimmed.isEmpty()) return;
 
-                            Matcher tqdmMatcher = tqdmPattern.matcher(trimmed);
-                            if (tqdmMatcher.find()) {
-                                cliSizeDataAvailable[0] = true;
-                                long now = System.currentTimeMillis();
-                                if (now - lastUiUpdate[0] < 400) return;
-                                lastUiUpdate[0] = now;
+                    Matcher tqdmMatcher = tqdmPattern.matcher(trimmed);
+                    if (tqdmMatcher.find()) {
+                        cliSizeDataAvailable[0] = true;
+                        long now = System.currentTimeMillis();
+                        if (now - lastUiUpdate[0] < 400) return;
+                        lastUiUpdate[0] = now;
 
-                                int pct = Integer.parseInt(tqdmMatcher.group(1));
-                                double pctFloat = Double.parseDouble(tqdmMatcher.group(2));
-                                String elapsed = tqdmMatcher.group(4).trim();
-                                String remaining = tqdmMatcher.group(5).trim();
+                        int pct = Integer.parseInt(tqdmMatcher.group(1));
+                        double pctFloat = Double.parseDouble(tqdmMatcher.group(2));
+                        String elapsed = tqdmMatcher.group(4).trim();
+                        String remaining = tqdmMatcher.group(5).trim();
 
-                                String transferredText;
-                                String speedText;
-                                if (finalEstimatedTotalBytes > 0) {
-                                    long transferred = (long) (pctFloat / 100.0 * finalEstimatedTotalBytes);
-                                    transferredText = "Transferred: " + formatSize(transferred) + " / ~" + formatSize(finalEstimatedTotalBytes);
-                                    if (prevCliTime[0] > 0 && transferred > prevCliTransferred[0]) {
-                                        long timeDelta = now - prevCliTime[0];
-                                        long sizeDelta = transferred - prevCliTransferred[0];
-                                        if (timeDelta > 0) {
-                                            double instantSpeed = sizeDelta / (timeDelta / 1000.0);
-                                            cliSmoothedSpeed[0] = cliSmoothedSpeed[0] == 0
-                                                    ? instantSpeed
-                                                    : 0.3 * instantSpeed + 0.7 * cliSmoothedSpeed[0];
-                                        }
-                                    }
-                                    prevCliTransferred[0] = transferred;
-                                    prevCliTime[0] = now;
-                                    speedText = cliSmoothedSpeed[0] > 0
-                                            ? "Transfer speed: " + formatSpeed(cliSmoothedSpeed[0])
-                                            : "Transfer speed: calculating...";
+                        String transferredText;
+                        String speedText;
+                        if (finalEstimatedTotalBytes > 0) {
+                            long transferred = (long) (pctFloat / 100.0 * finalEstimatedTotalBytes);
+                            transferredText = "Transferred: " + formatSize(transferred) + " / ~" + formatSize(finalEstimatedTotalBytes);
+                            if (prevCliTime[0] > 0 && transferred > prevCliTransferred[0]) {
+                                long timeDelta = now - prevCliTime[0];
+                                long sizeDelta = transferred - prevCliTransferred[0];
+                                if (timeDelta > 0) {
+                                    double instantSpeed = sizeDelta / (timeDelta / 1000.0);
+                                    cliSmoothedSpeed[0] = cliSmoothedSpeed[0] == 0
+                                            ? instantSpeed
+                                            : 0.3 * instantSpeed + 0.7 * cliSmoothedSpeed[0];
+                                }
+                            }
+                            prevCliTransferred[0] = transferred;
+                            prevCliTime[0] = now;
+                            speedText = cliSmoothedSpeed[0] > 0
+                                    ? "Transfer speed: " + formatSpeed(cliSmoothedSpeed[0])
+                                    : "Transfer speed: calculating...";
+                        } else {
+                            transferredText = "Progress: " + String.format(java.util.Locale.ROOT, "%.1f%%", pctFloat);
+                            long elapsedMs = now - startTime[0];
+                            if (elapsedMs > 3000 && pctFloat > 0) {
+                                double pctPerSec = pctFloat / (elapsedMs / 1000.0);
+                                speedText = "Transfer speed: " + String.format(java.util.Locale.ROOT, "%.1f%%/min", pctPerSec * 60);
+                            } else {
+                                speedText = "Transfer speed: calculating...";
+                            }
+                        }
+
+                        int logPct = pct / 5 * 5;
+                        boolean shouldLog = logPct > lastLoggedPct[0] && logPct % 5 == 0;
+                        if (shouldLog) lastLoggedPct[0] = logPct;
+                        String logLine = null;
+                        if (shouldLog) {
+                            if (finalEstimatedTotalBytes > 0) {
+                                long transferred = (long) (pctFloat / 100.0 * finalEstimatedTotalBytes);
+                                logLine = pct + "% completed — " + formatSize(transferred) + " transferred (" + elapsed + " elapsed)\n";
+                            } else {
+                                logLine = pct + "% completed (" + elapsed + " elapsed)\n";
+                            }
+                        }
+                        String logEntry = logLine;
+
+                        Platform.runLater(() -> {
+                            progressBar.setProgress(pct / 100.0);
+                            percentLabel.setText(pct + "%");
+                            statusLabel.setText("Backup in progress...");
+                            speedLabel.setText(speedText);
+                            etaLabel.setText("Estimated time remaining: " + remaining);
+                            transferredLabel.setText(transferredText);
+                            filesLabel.setText("Elapsed: " + elapsed);
+                            if (logEntry != null) logArea.appendText(logEntry);
+                        });
+                        return;
+                    }
+
+                    Matcher tqdmSimpleMatcher = tqdmSimplePattern.matcher(trimmed);
+                    if (tqdmSimpleMatcher.find()) {
+                        long now = System.currentTimeMillis();
+                        if (now - lastUiUpdate[0] < 400) return;
+                        lastUiUpdate[0] = now;
+
+                        int pct = Integer.parseInt(tqdmSimpleMatcher.group(1));
+                        Platform.runLater(() -> {
+                            progressBar.setProgress(pct / 100.0);
+                            percentLabel.setText(pct + "%");
+                            statusLabel.setText("Backup in progress...");
+                        });
+                        return;
+                    }
+
+                    boolean isIdeviceProgress = ideviceProgressPattern.matcher(trimmed).find();
+
+                    if (isIdeviceProgress) {
+                        int bracketEnd = trimmed.indexOf(']');
+                        if (bracketEnd > 1) {
+                            String filePath = trimmed.substring(1, bracketEnd);
+                            if (!filePath.equals(currentProgressFile[0])) {
+                                currentProgressFile[0] = filePath;
+                                fileCount[0]++;
+                            }
+                        }
+                    }
+
+                    if (!isIdeviceProgress) {
+                        long elapsedSec = (System.currentTimeMillis() - startTime[0]) / 1000;
+                        Platform.runLater(() -> {
+                            logArea.appendText(trimmed + "\n");
+                            filesLabel.setText("Files received: " + fileCount[0] + "  |  Elapsed: " + formatDuration(elapsedSec));
+                        });
+                    }
+
+                    Matcher sm = ideviceSizePattern.matcher(trimmed);
+                    boolean hasSizeInfo = sm.find();
+
+                    if (hasSizeInfo) {
+                        cliSizeDataAvailable[0] = true;
+                        long now = System.currentTimeMillis();
+
+                        double fileCurrent = toBytes(Double.parseDouble(sm.group(1)), sm.group(2));
+                        double fileTotal = toBytes(Double.parseDouble(sm.group(3)), sm.group(4));
+
+                        if (fileTotal != prevFileTotal[0] && prevFileTotal[0] > 0) {
+                            accumulatedBytes[0] += prevFileTotal[0];
+                        }
+                        prevFileTotal[0] = fileTotal;
+
+                        if (now - lastUiUpdate[0] < 500) return;
+                        lastUiUpdate[0] = now;
+
+                        double totalTransferred = accumulatedBytes[0] + fileCurrent;
+
+                        if (prevCliTime[0] > 0 && totalTransferred > prevCliTransferred[0]) {
+                            long timeDelta = now - prevCliTime[0];
+                            long sizeDelta = (long) (totalTransferred - prevCliTransferred[0]);
+                            if (timeDelta > 0 && sizeDelta > 0) {
+                                double instantSpeed = sizeDelta / (timeDelta / 1000.0);
+                                cliSmoothedSpeed[0] = cliSmoothedSpeed[0] == 0
+                                        ? instantSpeed
+                                        : 0.3 * instantSpeed + 0.7 * cliSmoothedSpeed[0];
+                            }
+                        }
+                        prevCliTransferred[0] = (long) totalTransferred;
+                        prevCliTime[0] = now;
+
+                        String speedText = "Transfer speed: --";
+                        String etaText = "Estimated time remaining: calculating...";
+                        double overallPct = 0;
+
+                        if (cliSmoothedSpeed[0] > 0) {
+                            speedText = "Transfer speed: " + formatSpeed(cliSmoothedSpeed[0]);
+
+                            if (finalEstimatedTotalBytes > 0) {
+                                overallPct = (totalTransferred / finalEstimatedTotalBytes) * 100.0;
+                                if (overallPct > 100) overallPct = 99.9;
+                                double remainingBytes = finalEstimatedTotalBytes - totalTransferred;
+                                if (remainingBytes > 0) {
+                                    long remainingSec = (long) (remainingBytes / cliSmoothedSpeed[0]);
+                                    etaText = "Estimated time remaining: ~" + formatDuration(remainingSec);
                                 } else {
-                                    transferredText = "Progress: " + String.format(java.util.Locale.ROOT, "%.1f%%", pctFloat);
-                                    long elapsedMs = now - startTime[0];
-                                    if (elapsedMs > 3000 && pctFloat > 0) {
-                                        double pctPerSec = pctFloat / (elapsedMs / 1000.0);
-                                        speedText = "Transfer speed: " + String.format(java.util.Locale.ROOT, "%.1f%%/min", pctPerSec * 60);
-                                    } else {
-                                        speedText = "Transfer speed: calculating...";
-                                    }
-                                }
-
-                                int logPct = pct / 5 * 5;
-                                boolean shouldLog = logPct > lastLoggedPct[0] && logPct % 5 == 0;
-                                if (shouldLog) lastLoggedPct[0] = logPct;
-                                String logLine = null;
-                                if (shouldLog) {
-                                    if (finalEstimatedTotalBytes > 0) {
-                                        long transferred = (long) (pctFloat / 100.0 * finalEstimatedTotalBytes);
-                                        logLine = pct + "% completed — " + formatSize(transferred) + " transferred (" + elapsed + " elapsed)\n";
-                                    } else {
-                                        logLine = pct + "% completed (" + elapsed + " elapsed)\n";
-                                    }
-                                }
-                                String logEntry = logLine;
-
-                                Platform.runLater(() -> {
-                                    progressBar.setProgress(pct / 100.0);
-                                    percentLabel.setText(pct + "%");
-                                    statusLabel.setText("Backup in progress...");
-                                    speedLabel.setText(speedText);
-                                    etaLabel.setText("Estimated time remaining: " + remaining);
-                                    transferredLabel.setText(transferredText);
-                                    filesLabel.setText("Elapsed: " + elapsed);
-                                    if (logEntry != null) logArea.appendText(logEntry);
-                                });
-                                return;
-                            }
-
-                            Matcher tqdmSimpleMatcher = tqdmSimplePattern.matcher(trimmed);
-                            if (tqdmSimpleMatcher.find()) {
-                                long now = System.currentTimeMillis();
-                                if (now - lastUiUpdate[0] < 400) return;
-                                lastUiUpdate[0] = now;
-
-                                int pct = Integer.parseInt(tqdmSimpleMatcher.group(1));
-                                Platform.runLater(() -> {
-                                    progressBar.setProgress(pct / 100.0);
-                                    percentLabel.setText(pct + "%");
-                                    statusLabel.setText("Backup in progress...");
-                                });
-                                return;
-                            }
-
-                            boolean isIdeviceProgress = ideviceProgressPattern.matcher(trimmed).find();
-
-                            if (isIdeviceProgress) {
-                                int bracketEnd = trimmed.indexOf(']');
-                                if (bracketEnd > 1) {
-                                    String filePath = trimmed.substring(1, bracketEnd);
-                                    if (!filePath.equals(currentProgressFile[0])) {
-                                        currentProgressFile[0] = filePath;
-                                        fileCount[0]++;
-                                    }
+                                    etaText = "Estimated time remaining: finishing...";
                                 }
                             }
+                        }
 
-                            if (!isIdeviceProgress) {
-                                long elapsedSec = (System.currentTimeMillis() - startTime[0]) / 1000;
-                                Platform.runLater(() -> {
-                                    logArea.appendText(trimmed + "\n");
-                                    filesLabel.setText("Files received: " + fileCount[0] + "  |  Elapsed: " + formatDuration(elapsedSec));
-                                });
+                        String transferredText = "Transferred: " + formatSize((long) totalTransferred) +
+                                (finalEstimatedTotalBytes > 0 ? " / ~" + formatSize(finalEstimatedTotalBytes) : "");
+                        String statusText = "Current file: " + sm.group(1) + " " + sm.group(2) +
+                                " / " + sm.group(3) + " " + sm.group(4);
+
+                        int logPct = (int) (overallPct / 5) * 5;
+                        boolean shouldLog = logPct > lastLoggedPct[0] && logPct % 5 == 0 && overallPct > 0;
+                        if (shouldLog) lastLoggedPct[0] = logPct;
+                        String logEntry = null;
+                        if (shouldLog) {
+                            long elapsed = (now - startTime[0]) / 1000;
+                            logEntry = logPct + "% completed — " + formatSize((long) totalTransferred) + " transferred (" + formatDuration(elapsed) + " elapsed)\n";
+                        }
+
+                        double pctFinal = overallPct;
+                        String speedFinal = speedText;
+                        String etaFinal = etaText;
+                        String transferredFinal = transferredText;
+                        long elapsedSec = (now - startTime[0]) / 1000;
+                        String logEntryFinal = logEntry;
+
+                        Platform.runLater(() -> {
+                            statusLabel.setText(statusText);
+                            transferredLabel.setText(transferredFinal);
+                            speedLabel.setText(speedFinal);
+                            etaLabel.setText(etaFinal);
+                            filesLabel.setText("Files received: " + fileCount[0] + "  |  Elapsed: " + formatDuration(elapsedSec));
+                            if (finalEstimatedTotalBytes > 0) {
+                                progressBar.setProgress(pctFinal / 100.0);
+                                percentLabel.setText(String.format("%.1f%%", pctFinal));
+                            } else {
+                                progressBar.setProgress(-1);
+                                percentLabel.setText(formatSize((long) (accumulatedBytes[0] + fileCurrent)));
                             }
+                            if (logEntryFinal != null) logArea.appendText(logEntryFinal);
+                        });
+                    } else if (isIdeviceProgress) {
+                        Matcher pctMatcher = idevicePctPattern.matcher(trimmed);
+                        if (pctMatcher.find()) {
+                            int pct = Integer.parseInt(pctMatcher.group(1));
+                            long now = System.currentTimeMillis();
+                            if (now - lastUiUpdate[0] < 500) return;
+                            lastUiUpdate[0] = now;
 
-                            Matcher sm = ideviceSizePattern.matcher(trimmed);
-                            boolean hasSizeInfo = sm.find();
+                            long elapsedSec = (now - startTime[0]) / 1000;
+                            Platform.runLater(() -> {
+                                statusLabel.setText("Current file: " + pct + "% complete");
+                                filesLabel.setText("Files received: " + fileCount[0] + "  |  Elapsed: " + formatDuration(elapsedSec));
+                            });
+                        }
+                    }
+                };
 
-                            if (hasSizeInfo) {
-                                cliSizeDataAvailable[0] = true;
-                                long now = System.currentTimeMillis();
+                if (encryptionChoice.enable()) {
+                    onProgressLine.accept("[encryption] Enabling encrypted backup...");
+                    boolean ok = DeviceService.setBackupEncryption(udid, encryptionChoice.password(), true, onProgressLine);
+                    if (!ok) {
+                        onProgressLine.accept("[encryption] Failed to enable encryption.");
+                        clearPassword(encryptionChoice.password());
+                        return DeviceService.BackupResult.FAILED;
+                    }
+                }
 
-                                double fileCurrent = toBytes(Double.parseDouble(sm.group(1)), sm.group(2));
-                                double fileTotal = toBytes(Double.parseDouble(sm.group(3)), sm.group(4));
+                DeviceService.BackupResult result = DeviceService.createBackup(
+                        udid, destination, onProgressLine, this::isCancelled);
 
-                                if (fileTotal != prevFileTotal[0] && prevFileTotal[0] > 0) {
-                                    accumulatedBytes[0] += prevFileTotal[0];
-                                }
-                                prevFileTotal[0] = fileTotal;
+                if (encryptionChoice.enable() && encryptionChoice.disableAfter() && result != DeviceService.BackupResult.CANCELLED) {
+                    onProgressLine.accept("[encryption] Disabling backup encryption...");
+                    boolean offOk = DeviceService.setBackupEncryption(udid, encryptionChoice.password(), false, onProgressLine);
+                    if (!offOk) {
+                        onProgressLine.accept("[encryption] Warning: failed to disable encryption.");
+                    }
+                }
 
-                                if (now - lastUiUpdate[0] < 500) return;
-                                lastUiUpdate[0] = now;
-
-                                double totalTransferred = accumulatedBytes[0] + fileCurrent;
-
-                                if (prevCliTime[0] > 0 && totalTransferred > prevCliTransferred[0]) {
-                                    long timeDelta = now - prevCliTime[0];
-                                    long sizeDelta = (long) (totalTransferred - prevCliTransferred[0]);
-                                    if (timeDelta > 0 && sizeDelta > 0) {
-                                        double instantSpeed = sizeDelta / (timeDelta / 1000.0);
-                                        cliSmoothedSpeed[0] = cliSmoothedSpeed[0] == 0
-                                                ? instantSpeed
-                                                : 0.3 * instantSpeed + 0.7 * cliSmoothedSpeed[0];
-                                    }
-                                }
-                                prevCliTransferred[0] = (long) totalTransferred;
-                                prevCliTime[0] = now;
-
-                                String speedText = "Transfer speed: --";
-                                String etaText = "Estimated time remaining: calculating...";
-                                double overallPct = 0;
-
-                                if (cliSmoothedSpeed[0] > 0) {
-                                    speedText = "Transfer speed: " + formatSpeed(cliSmoothedSpeed[0]);
-
-                                    if (finalEstimatedTotalBytes > 0) {
-                                        overallPct = (totalTransferred / finalEstimatedTotalBytes) * 100.0;
-                                        if (overallPct > 100) overallPct = 99.9;
-                                        double remainingBytes = finalEstimatedTotalBytes - totalTransferred;
-                                        if (remainingBytes > 0) {
-                                            long remainingSec = (long) (remainingBytes / cliSmoothedSpeed[0]);
-                                            etaText = "Estimated time remaining: ~" + formatDuration(remainingSec);
-                                        } else {
-                                            etaText = "Estimated time remaining: finishing...";
-                                        }
-                                    }
-                                }
-
-                                String transferredText = "Transferred: " + formatSize((long) totalTransferred) +
-                                        (finalEstimatedTotalBytes > 0 ? " / ~" + formatSize(finalEstimatedTotalBytes) : "");
-                                String statusText = "Current file: " + sm.group(1) + " " + sm.group(2) +
-                                        " / " + sm.group(3) + " " + sm.group(4);
-
-                                int logPct = (int) (overallPct / 5) * 5;
-                                boolean shouldLog = logPct > lastLoggedPct[0] && logPct % 5 == 0 && overallPct > 0;
-                                if (shouldLog) lastLoggedPct[0] = logPct;
-                                String logEntry = null;
-                                if (shouldLog) {
-                                    long elapsed = (now - startTime[0]) / 1000;
-                                    logEntry = logPct + "% completed — " + formatSize((long) totalTransferred) + " transferred (" + formatDuration(elapsed) + " elapsed)\n";
-                                }
-
-                                double pctFinal = overallPct;
-                                String speedFinal = speedText;
-                                String etaFinal = etaText;
-                                String transferredFinal = transferredText;
-                                long elapsedSec = (now - startTime[0]) / 1000;
-                                String logEntryFinal = logEntry;
-
-                                Platform.runLater(() -> {
-                                    statusLabel.setText(statusText);
-                                    transferredLabel.setText(transferredFinal);
-                                    speedLabel.setText(speedFinal);
-                                    etaLabel.setText(etaFinal);
-                                    filesLabel.setText("Files received: " + fileCount[0] + "  |  Elapsed: " + formatDuration(elapsedSec));
-                                    if (finalEstimatedTotalBytes > 0) {
-                                        progressBar.setProgress(pctFinal / 100.0);
-                                        percentLabel.setText(String.format("%.1f%%", pctFinal));
-                                    } else {
-                                        progressBar.setProgress(-1);
-                                        percentLabel.setText(formatSize((long) (accumulatedBytes[0] + fileCurrent)));
-                                    }
-                                    if (logEntryFinal != null) logArea.appendText(logEntryFinal);
-                                });
-                            } else if (isIdeviceProgress) {
-                                Matcher pctMatcher = idevicePctPattern.matcher(trimmed);
-                                if (pctMatcher.find()) {
-                                    int pct = Integer.parseInt(pctMatcher.group(1));
-                                    long now = System.currentTimeMillis();
-                                    if (now - lastUiUpdate[0] < 500) return;
-                                    lastUiUpdate[0] = now;
-
-                                    long elapsedSec = (now - startTime[0]) / 1000;
-                                    Platform.runLater(() -> {
-                                        statusLabel.setText("Current file: " + pct + "% complete");
-                                        filesLabel.setText("Files received: " + fileCount[0] + "  |  Elapsed: " + formatDuration(elapsedSec));
-                                    });
-                                }
-                            }
-                        },
-                        this::isCancelled);
+                clearPassword(encryptionChoice.password());
+                return result;
             }
         };
 
@@ -1280,5 +1307,10 @@ public class WindowController {
         }));
 
         new Thread(task).start();
+    }
+
+    private static void clearPassword(char[] password) {
+        if (password == null) return;
+        Arrays.fill(password, '\0');
     }
 }

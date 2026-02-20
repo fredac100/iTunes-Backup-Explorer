@@ -39,6 +39,9 @@ public class WhatsAppTabController {
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss").withZone(ZoneId.systemDefault());
     private static final String WHATSAPP_DOMAIN = "%net.whatsapp%";
     private static final String CHAT_STORAGE_PATTERN = "%ChatStorage.sqlite";
+    private static final String WHATSAPP_GROUP_DOMAIN_PREFIX = "AppDomainGroup-group.net.whatsapp.WhatsApp";
+    private static final String WHATSAPP_REGULAR_DOMAIN = "AppDomainGroup-group.net.whatsapp.WhatsApp.shared";
+    private static final String WHATSAPP_BUSINESS_DOMAIN = "AppDomainGroup-group.net.whatsapp.WhatsAppSMB.shared";
 
     private static final String[] SENDER_COLORS = {
             "#e06c75", "#e5c07b", "#98c379", "#56b6c2",
@@ -78,6 +81,7 @@ public class WhatsAppTabController {
     @FXML Label messageCountLabel;
     @FXML TextField messageSearchField;
     @FXML Button exportButton;
+    @FXML Button diagnosticsButton;
 
     @FXML
     public void initialize() {
@@ -116,20 +120,25 @@ public class WhatsAppTabController {
                         .filter(f -> f.relativePath.endsWith("ChatStorage.sqlite"))
                         .collect(Collectors.toList());
 
-                logger.info("Found {} ChatStorage.sqlite candidates: {}",
-                        chatDbs.size(), chatDbs.stream().map(f -> f.domain).collect(Collectors.joining(", ")));
+                logger.info("Found {} ChatStorage.sqlite candidates:", chatDbs.size());
+                chatDbs.forEach(f -> logger.info("  - domain='{}' path='{}' size={}",
+                        f.domain, f.relativePath, f.getSize()));
 
-                // Prefer regular WhatsApp over WhatsApp Business (SMB)
+                // Prefer regular WhatsApp (group container), then other WhatsApp domains,
+                // and only then WhatsApp Business. Within each tier, pick the largest DB.
+                Comparator<BackupFile> dbComparator = Comparator
+                        .comparingInt((BackupFile f) -> rankWhatsappDomain(f.domain))
+                        .thenComparing(Comparator.comparingLong(BackupFile::getSize).reversed());
+
                 BackupFile chatStorageFile = chatDbs.stream()
-                        .filter(f -> !f.domain.contains("WhatsAppSMB"))
+                        .sorted(dbComparator)
                         .findFirst()
-                        .or(() -> chatDbs.stream().findFirst())
                         .orElse(null);
 
                 if (chatStorageFile == null) return null;
 
-                logger.info("Selected ChatStorage.sqlite from domain '{}' at '{}'",
-                        chatStorageFile.domain, chatStorageFile.relativePath);
+                logger.info("Selected ChatStorage.sqlite from domain '{}' at '{}' (size={})",
+                        chatStorageFile.domain, chatStorageFile.relativePath, chatStorageFile.getSize());
 
                 // Create a temp directory so WAL/SHM companion files sit beside the main DB
                 File dir = Files.createTempDirectory("whatsapp_db_").toFile();
@@ -157,6 +166,7 @@ public class WhatsAppTabController {
             }
             databaseService = result.service();
             whatsappDomain = result.domain();
+            diagnosticsButton.setDisable(false);
             try {
                 thumbnailCacheDir = Files.createTempDirectory("whatsapp_thumbs_").toFile();
                 thumbnailCacheDir.deleteOnExit();
@@ -218,6 +228,15 @@ public class WhatsAppTabController {
         Thread thread = new Thread(task, "whatsapp-load-chats");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    private static int rankWhatsappDomain(String domain) {
+        if (domain == null) return 99;
+        String d = domain.toLowerCase(Locale.ROOT);
+        if (d.contains("whatsappsmb")) return 2;
+        if (d.startsWith("appdomaingroup-group.net.whatsapp.whatsapp")) return 0;
+        if (d.contains("net.whatsapp")) return 1;
+        return 9;
     }
 
     private void applyFilter() {
@@ -847,6 +866,7 @@ public class WhatsAppTabController {
         conversationHeaderBox.setManaged(false);
         chatListView.setItems(FXCollections.observableArrayList());
         chatCountLabel.setText("0 chats");
+        diagnosticsButton.setDisable(true);
     }
 
     private static String formatFileSize(long bytes) {
@@ -891,6 +911,7 @@ public class WhatsAppTabController {
         conversationHeaderBox.setManaged(false);
         emptyStatePane.setVisible(true);
         exportButton.setDisable(true);
+        diagnosticsButton.setDisable(true);
         loadOlderButton.setDisable(true);
         messageCountLabel.setText("");
         messageSearchField.clear();
@@ -945,6 +966,9 @@ public class WhatsAppTabController {
             }
         };
 
+        task.setOnSucceeded(event ->
+                Dialogs.showAlert(Alert.AlertType.INFORMATION, "Chat exported successfully to " + destination.getName()));
+
         task.setOnFailed(event -> {
             logger.error("Failed to export chat", task.getException());
             Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to export chat: " + task.getException().getMessage());
@@ -953,6 +977,112 @@ public class WhatsAppTabController {
         Thread thread = new Thread(task, "whatsapp-export");
         thread.setDaemon(true);
         thread.start();
+    }
+
+    @FXML
+    private void onDiagnostics() {
+        if (selectedBackup == null) {
+            Dialogs.showAlert(Alert.AlertType.ERROR, "No backup selected.");
+            return;
+        }
+
+        diagnosticsButton.setDisable(true);
+        javafx.concurrent.Task<String> task = new javafx.concurrent.Task<>() {
+            @Override
+            protected String call() throws Exception {
+                return buildWhatsappDiagnostics(selectedBackup);
+            }
+        };
+
+        task.setOnSucceeded(event -> {
+            diagnosticsButton.setDisable(false);
+            String report = task.getValue();
+            Alert alert = Dialogs.getAlert(Alert.AlertType.INFORMATION, "");
+            alert.setTitle("WhatsApp Diagnostics");
+            alert.setHeaderText("WhatsApp domains and ChatStorage in this backup");
+            TextArea area = new TextArea(report);
+            area.setEditable(false);
+            area.setWrapText(false);
+            area.setPrefWidth(720);
+            area.setPrefHeight(420);
+            alert.getDialogPane().setContent(area);
+            alert.getDialogPane().setPrefWidth(760);
+            alert.getDialogPane().setPrefHeight(500);
+            alert.showAndWait();
+        });
+
+        task.setOnFailed(event -> {
+            diagnosticsButton.setDisable(false);
+            String msg = task.getException() != null ? task.getException().getMessage() : "Unknown error";
+            Dialogs.showAlert(Alert.AlertType.ERROR, "Failed to generate diagnostics: " + msg);
+        });
+
+        Thread thread = new Thread(task, "whatsapp-diagnostics");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private String buildWhatsappDiagnostics(ITunesBackup backup) throws DatabaseConnectionException {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Backup: ").append(backup.directory.getAbsolutePath()).append('\n');
+
+        List<BackupFile> domainRoots = backup.queryDomainRoots();
+        List<String> whatsappDomains = domainRoots.stream()
+                .map(f -> f.domain)
+                .filter(Objects::nonNull)
+                .filter(d -> d.toLowerCase(Locale.ROOT).contains("whatsapp"))
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+
+        boolean hasRegular = whatsappDomains.contains(WHATSAPP_REGULAR_DOMAIN);
+        boolean hasBusiness = whatsappDomains.stream().anyMatch(d -> d.equalsIgnoreCase(WHATSAPP_BUSINESS_DOMAIN)
+                || d.toLowerCase(Locale.ROOT).contains("whatsappsmb"));
+
+        sb.append("WhatsApp domains found: ").append(whatsappDomains.size()).append('\n');
+        sb.append("Regular WhatsApp domain: ").append(hasRegular ? "FOUND" : "NOT FOUND").append('\n');
+        sb.append("WhatsApp Business domain: ").append(hasBusiness ? "FOUND" : "NOT FOUND").append('\n');
+        sb.append('\n');
+
+        if (whatsappDomains.isEmpty()) {
+            sb.append("No WhatsApp domains were found in this backup.\n");
+            return sb.toString();
+        }
+
+        for (String domain : whatsappDomains) {
+            sb.append(domain).append('\n');
+
+            List<BackupFile> dbs = backup.searchFiles(domain, "%ChatStorage.sqlite");
+            List<BackupFile> dbFiles = dbs.stream()
+                    .filter(f -> f.getFileType() == BackupFile.FileType.FILE)
+                    .collect(Collectors.toList());
+
+            if (dbFiles.isEmpty()) {
+                sb.append("  ChatStorage.sqlite: NOT FOUND\n");
+            } else {
+                for (BackupFile f : dbFiles) {
+                    sb.append("  ChatStorage.sqlite: ")
+                            .append(f.relativePath)
+                            .append(" (")
+                            .append(formatFileSize(f.getSize()))
+                            .append(")\n");
+                }
+            }
+
+            List<BackupFile> wal = backup.searchFiles(domain, "%ChatStorage.sqlite-wal").stream()
+                    .filter(f -> f.getFileType() == BackupFile.FileType.FILE)
+                    .collect(Collectors.toList());
+            sb.append("  WAL: ").append(wal.isEmpty() ? "no" : "yes (" + wal.size() + ")").append('\n');
+
+            List<BackupFile> shm = backup.searchFiles(domain, "%ChatStorage.sqlite-shm").stream()
+                    .filter(f -> f.getFileType() == BackupFile.FileType.FILE)
+                    .collect(Collectors.toList());
+            sb.append("  SHM: ").append(shm.isEmpty() ? "no" : "yes (" + shm.size() + ")").append('\n');
+
+            sb.append('\n');
+        }
+
+        return sb.toString();
     }
 
     private static class ChatListCell extends ListCell<WhatsAppChat> {

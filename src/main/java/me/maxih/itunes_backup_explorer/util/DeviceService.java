@@ -488,6 +488,41 @@ public class DeviceService {
         }
     }
 
+    private record CommandResult(int exitCode, String output) {}
+
+    private static CommandResult runCommandWithLog(Consumer<String> onProgressLine, String... command) {
+        StringBuilder output = new StringBuilder();
+        try {
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line).append('\n');
+                    if (onProgressLine != null) {
+                        emitLog(onProgressLine, "[encryption] " + line);
+                    }
+                }
+            }
+
+            boolean finished = process.waitFor(60, TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                return new CommandResult(-1, output.toString());
+            }
+            return new CommandResult(process.exitValue(), output.toString());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new CommandResult(-1, output.toString());
+        } catch (Exception e) {
+            logger.warn("Failed to run command '{}': {}", command[0], e.getMessage());
+            return new CommandResult(-1, output.toString());
+        }
+    }
+
     private static byte[] runCommand(int timeoutSeconds, String... command) {
         try {
             ProcessBuilder pb = new ProcessBuilder(command);
@@ -801,14 +836,64 @@ public class DeviceService {
 
     public enum BackupResult { SUCCESS, CANCELLED, FAILED }
 
-    public static BackupResult createBackup(String udid, File destination,
-                                            Consumer<String> onProgressLine, Supplier<Boolean> isCancelled) {
-        if (isLibimobiledeviceAvailable()) {
-            return createBackupViaLibimobiledevice(udid, destination, onProgressLine, isCancelled);
+    public static boolean setBackupEncryption(String udid, char[] password, boolean enable, Consumer<String> onProgressLine) {
+        if (password == null || password.length == 0) {
+            emitLog(onProgressLine, "[encryption] Password is empty.");
+            return false;
         }
+        String pass = new String(password);
+        String mode = enable ? "on" : "off";
 
         if (isPymobiledevice3Available()) {
-            return createBackupViaPymd3(udid, destination, onProgressLine, isCancelled);
+            List<String> cmd = new ArrayList<>();
+            cmd.add(activeCli());
+            cmd.add("backup2");
+            cmd.add("encryption");
+            cmd.add(mode);
+            cmd.add(pass);
+            cmd.add("--udid");
+            cmd.add(udid);
+            CommandResult res = runCommandWithLog(onProgressLine, cmd.toArray(new String[0]));
+            if (res.exitCode == 0) return true;
+            emitLog(onProgressLine, "[encryption] pymobiledevice3 failed; trying libimobiledevice...");
+            logger.warn("pymobiledevice3 encryption {} failed (exit={})", mode, res.exitCode);
+        }
+
+        if (isLibimobiledeviceAvailable()) {
+            CommandResult res = runCommandWithLog(onProgressLine,
+                    "idevicebackup2", "encryption", mode, pass, "--udid", udid);
+            if (res.exitCode == 0) return true;
+            logger.warn("libimobiledevice encryption {} failed (exit={})", mode, res.exitCode);
+        }
+
+        return false;
+    }
+
+    public static BackupResult createBackup(String udid, File destination,
+                                            Consumer<String> onProgressLine, Supplier<Boolean> isCancelled) {
+        if (isPymobiledevice3Available()) {
+            logger.info("Creating backup via pymobiledevice3");
+            BackupResult result = BackupResult.FAILED;
+            for (int attempt = 1; attempt <= 2; attempt++) {
+                if (attempt > 1) {
+                    emitLog(onProgressLine, "pymobiledevice3 failed; retrying (" + attempt + "/2)...");
+                    logger.warn("pymobiledevice3 backup failed; retrying attempt {}/2", attempt);
+                    try { Thread.sleep(2000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+                }
+                result = createBackupViaPymd3(udid, destination, onProgressLine, isCancelled);
+                if (result == BackupResult.SUCCESS || result == BackupResult.CANCELLED) return result;
+            }
+            if (isLibimobiledeviceAvailable()) {
+                emitLog(onProgressLine, "pymobiledevice3 failed; retrying with libimobiledevice...");
+                logger.warn("pymobiledevice3 backup failed; falling back to libimobiledevice");
+                return createBackupViaLibimobiledevice(udid, destination, onProgressLine, isCancelled);
+            }
+            return result;
+        }
+
+        if (isLibimobiledeviceAvailable()) {
+            logger.info("Creating backup via libimobiledevice");
+            return createBackupViaLibimobiledevice(udid, destination, onProgressLine, isCancelled);
         }
 
         return BackupResult.FAILED;
@@ -816,10 +901,27 @@ public class DeviceService {
 
     private static BackupResult createBackupViaLibimobiledevice(String udid, File destination,
                                                                  Consumer<String> onProgressLine, Supplier<Boolean> isCancelled) {
+        BackupResult result = runIdevicebackup(udid, destination, onProgressLine, isCancelled, true);
+        if (result == BackupResult.SUCCESS || result == BackupResult.CANCELLED) return result;
+
+        emitLog(onProgressLine, "libimobiledevice --full failed; retrying without --full...");
+        logger.warn("libimobiledevice --full failed; retrying without --full");
+        return runIdevicebackup(udid, destination, onProgressLine, isCancelled, false);
+    }
+
+    private static BackupResult runIdevicebackup(String udid, File destination,
+                                                 Consumer<String> onProgressLine, Supplier<Boolean> isCancelled,
+                                                 boolean full) {
         Process process = null;
         try {
-            ProcessBuilder pb = new ProcessBuilder(
-                    "idevicebackup2", "backup", "--udid", udid, destination.getAbsolutePath());
+            List<String> cmd = new ArrayList<>();
+            cmd.add("idevicebackup2");
+            cmd.add("backup");
+            if (full) cmd.add("--full");
+            cmd.add("--udid");
+            cmd.add(udid);
+            cmd.add(destination.getAbsolutePath());
+            ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectErrorStream(true);
             process = pb.start();
             Process proc = process;
